@@ -35,11 +35,8 @@
 //! #[borrowme]
 //! #[derive(Debug, PartialEq, Eq)]
 //! struct Word<'a> {
-//!     #[owned(String)]
 //!     text: &'a str,
-//!     #[owned(Option<String>)]
 //!     lang: Option<&'a str>,
-//!     #[owned(Vec<String>)]
 //!     examples: Vec<&'a str>,
 //! }
 //! ```
@@ -49,7 +46,7 @@
 //!
 //! ```
 //! # #[borrowme::borrowme] #[derive(Debug, PartialEq, Eq)] struct Word<'a> {
-//! # #[owned(String)] text: &'a str, #[owned(Option<String>)] lang: Option<&'a str>, #[owned(Vec<String>)] examples: Vec<&'a str>,
+//! # text: &'a str, lang: Option<&'a str>, examples: Vec<&'a str>,
 //! # }
 //! let text = String::from("Hello");
 //! let lang = Some(String::from("eng"));
@@ -104,7 +101,6 @@
 /// #[borrowme]
 /// #[derive(Serialize)]
 /// pub struct Word<'a> {
-///     #[owned(String)]
 ///     lang: &'a str,
 /// }
 ///
@@ -123,7 +119,6 @@
 /// #[derive(Serialize)]
 /// #[borrowme]
 /// pub struct Word<'a> {
-///     #[owned(String)]
 ///     lang: &'a str,
 /// }
 ///
@@ -161,15 +156,15 @@
 /// # use borrowme::borrowme;
 /// #[borrowme(prefix = Prefix)]
 /// struct Struct<'a> {
+/// # text: &'a str,
 ///     /* body */
-///  # #[owned(String)] text: &'a str,
 /// }
 ///
 /// #[borrowme(prefix = Prefix)]
 /// enum Enum<'a> {
 ///     /* body */
-/// # First { #[owned(String)] text: &'a str },
-/// # Second { #[owned(String)] text: &'a str },
+/// # First { text: &'a str },
+/// # Second { text: &'a str },
 /// }
 /// ```
 ///
@@ -185,7 +180,6 @@
 /// #[borrowme(prefix = Prefix)]
 /// #[derive(Debug, PartialEq)]
 /// struct Word<'a> {
-///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -212,7 +206,6 @@
 /// #[borrowme]
 /// #[borrowed_attr(derive(Clone))]
 /// struct Word<'a> {
-///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -236,7 +229,6 @@
 /// #[borrowme]
 /// #[owned_attr(derive(Clone))]
 /// struct Word<'a> {
-///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -275,7 +267,7 @@
 /// #[borrowme]
 /// #[borrowed_attr(derive(Default))]
 /// enum Word<'a> {
-///     Wiktionary(#[owned(String)] &'a str),
+///     Wiktionary(&'a str),
 ///     #[borrowed_attr(default)]
 ///     Unknown,
 /// }
@@ -296,7 +288,7 @@
 /// #[borrowme]
 /// #[owned_attr(derive(Default))]
 /// enum Word<'a> {
-///     Wiktionary(#[owned(String)] &'a str),
+///     Wiktionary(&'a str),
 ///     #[owned_attr(default)]
 ///     Unknown,
 /// }
@@ -341,13 +333,29 @@
 /// This specifies the owned type of the field. The latter variation is
 /// available so that it looks better when combined with other attributes.
 ///
+/// By default we try to automatically figure out the type through
+/// `ToOwned::Owned` by converting the field type into an expression such as
+/// `<<&'static str> as ::borrowme::ToOwned>::Owned`. When this doesn't work as
+/// expected like when using a type which does not implement `ToOwned` this can
+/// be overriden using this attribute.
+///
 /// ```
+/// struct MyType;
+/// struct MyOwnedType;
+///
 /// # use borrowme::borrowme;
 /// #[borrowme]
-/// #[derive(Clone, Debug)]
 /// pub struct Word<'a> {
-///     #[owned(String)]
-///     lang: &'a str,
+///     #[borrowme(owned = MyOwnedType, to_owned_with = to_owned_my_type, borrow_with = borrow_my_type)]
+///     lang: &'a MyType,
+/// }
+///
+/// fn to_owned_my_type(this: &MyType) -> MyOwnedType {
+///     MyOwnedType
+/// }
+///
+/// fn borrow_my_type(this: &MyOwnedType) -> &MyType {
+///     &MyType
 /// }
 /// ```
 ///
@@ -482,7 +490,6 @@
 /// #[borrowme]
 /// #[derive(Serialize, Deserialize)]
 /// pub struct Word<'a> {
-///     #[owned(Option<String>)]
 ///     #[borrowed_attr(serde(borrow))]
 ///     lang: Option<&'a str>,
 /// }
@@ -505,7 +512,6 @@
 /// #[borrowme]
 /// #[owned_attr(derive(Serialize, Deserialize))]
 /// struct Word<'a> {
-///     #[owned(Option<String>)]
 ///     #[owned_attr(serde(default, skip_serializing_if = "Option::is_none"))]
 ///     lang: Option<&'a str>,
 /// }

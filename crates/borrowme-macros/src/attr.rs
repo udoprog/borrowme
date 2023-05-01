@@ -1,9 +1,11 @@
+use proc_macro2::Span;
 use syn::meta::ParseNestedMeta;
 use syn::parse::ParseStream;
 use syn::spanned::Spanned;
 use syn::Token;
 
 use crate::ctxt::Ctxt;
+use crate::respan::Respan;
 
 pub(crate) const COPY: &str = "copy";
 pub(crate) const BORROWME: &str = "borrowme";
@@ -126,7 +128,7 @@ pub(crate) enum FieldType {
     // Copy the original field.
     Copy,
     // Replace with type.
-    Type(syn::Type),
+    Type(Respan<syn::Type>),
 }
 
 pub(crate) struct Field {
@@ -138,7 +140,11 @@ pub(crate) struct Field {
 }
 
 /// Parse field attributes.
-pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
+///
+/// We provide `field_spans` so that the processed `FieldType::Type` can be
+/// respanned to emit better diagnostics in case if fails something like a type
+/// check.
+pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) -> Result<Field, ()> {
     let mut field = Field {
         ty: FieldType::default(),
         borrow: cx.borrowme_borrow_t_borrow.clone(),
@@ -159,14 +165,14 @@ pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
             }
         } else if a.path().is_ident(OWNED) {
             a.parse_args_with(|input: ParseStream<'_>| {
-                field.ty = FieldType::Type(input.parse()?);
+                field.ty = FieldType::Type(Respan::new(input.parse()?, spans));
                 Ok(())
             })
         } else if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
                 if meta.path.is_ident("owned") {
                     meta.input.parse::<Token![=]>()?;
-                    field.ty = FieldType::Type(meta.input.parse()?);
+                    field.ty = FieldType::Type(Respan::new(meta.input.parse()?, spans));
                     return Ok(());
                 }
 

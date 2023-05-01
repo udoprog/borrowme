@@ -9,6 +9,7 @@ use syn::{token, Token};
 
 use crate::attr;
 use crate::ctxt::Ctxt;
+use crate::respan::Respan;
 
 const NAME: &str = "#[borrowme]";
 const STATIC: &str = "static";
@@ -374,7 +375,8 @@ fn process_fields(
     borrow_entries: &mut Vec<syn::FieldValue>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
-        let mut attr = attr::field(cx, &o_field.attrs)?;
+        let field_spans = field_spans(o_field);
+        let mut attr = attr::field(cx, field_spans, &o_field.attrs)?;
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
 
@@ -385,7 +387,7 @@ fn process_fields(
             let mut lifetimes = Vec::new();
             let mut as_ty = o_field.ty.clone();
 
-            let type_hint = process_type(cx, o_field.span(), &mut as_ty, &ignore, &mut lifetimes);
+            let type_hint = process_type(&mut as_ty, &ignore, &mut lifetimes);
 
             // Provide diagnostics in case there are field lifetimes we can't
             // make anything out of. Such as a `&'a str` field marked with
@@ -429,7 +431,7 @@ fn process_fields(
                             path,
                         });
 
-                        attr.ty = attr::FieldType::Type(ty);
+                        attr.ty = attr::FieldType::Type(Respan::new(ty, field_spans));
                     }
                     TypeHint::Copy => {
                         attr.ty = attr::FieldType::Copy;
@@ -445,7 +447,7 @@ fn process_fields(
                 (Call::Path(clone), Call::Path(clone))
             }
             attr::FieldType::Type(ty) => {
-                o_field.ty = ty.clone();
+                o_field.ty = ty.into_type();
                 (Call::Path(&attr.to_owned), Call::Path(&attr.borrow))
             }
         };
@@ -477,6 +479,22 @@ fn process_fields(
     }
 
     Ok(())
+}
+
+/// Calculate the field span to use for diagnostics such as when there is a type mismatch.
+fn field_spans(field: &syn::Field) -> (Span, Span) {
+    let end = field.ty.span();
+
+    let start = match &field.vis {
+        syn::Visibility::Public(tok) => tok.span(),
+        syn::Visibility::Restricted(tok) => tok.span(),
+        syn::Visibility::Inherited => match &field.ident {
+            Some(field) => field.span(),
+            None => end,
+        },
+    };
+
+    (start, end)
 }
 
 /// Apply attributes to the appropriate variant.
@@ -525,14 +543,12 @@ impl TypeHint {
 /// Capture all lifetimes from a type, and return a type which has all lifetimes
 /// sanitized so it can be used in a `<<$ty> as ToOwned>::Owned` expression.
 fn process_type<'ty>(
-    cx: &Ctxt,
-    span: Span,
     ty: &mut syn::Type,
     ignore: &HashSet<syn::Ident>,
     out: &mut Vec<(Span, Option<syn::Lifetime>)>,
 ) -> TypeHint {
     match ty {
-        syn::Type::Array(ty) => process_type(cx, span, &mut ty.elem, ignore, out),
+        syn::Type::Array(ty) => process_type(&mut ty.elem, ignore, out),
         syn::Type::BareFn(ty) => {
             let mut ignore = ignore.clone();
 
@@ -546,13 +562,13 @@ fn process_type<'ty>(
             }
 
             for arg in &mut ty.inputs {
-                process_type(cx, span, &mut arg.ty, &ignore, out);
+                process_type(&mut arg.ty, &ignore, out);
             }
 
             // NB: bare function are copy.
             TypeHint::Copy
         }
-        syn::Type::Group(ty) => process_type(cx, span, &mut ty.elem, ignore, out),
+        syn::Type::Group(ty) => process_type(&mut ty.elem, ignore, out),
         syn::Type::Reference(ty) => {
             if let Some(lt) = &ty.lifetime {
                 if ignore.contains(&lt.ident) || lt.ident == STATIC {
@@ -576,7 +592,7 @@ fn process_type<'ty>(
             TypeHint::None
         }
         syn::Type::Slice(ty) => {
-            process_type(cx, span, &mut ty.elem, ignore, out);
+            process_type(&mut ty.elem, ignore, out);
             // Slice types such as [T] are not copy, and they do in fact
             // indicate that the container is unsized.
             TypeHint::None
@@ -585,7 +601,7 @@ fn process_type<'ty>(
             let mut hint = TypeHint::Copy;
 
             for ty in &mut ty.elems {
-                hint.combine(process_type(cx, span, ty, ignore, out));
+                hint.combine(process_type(ty, ignore, out));
             }
 
             hint
@@ -594,11 +610,11 @@ fn process_type<'ty>(
             for s in &mut ty.path.segments {
                 match &mut s.arguments {
                     syn::PathArguments::AngleBracketed(generics) => {
-                        process_generic_type(cx, span, &mut generics.args, ignore, out);
+                        process_generic_type(&mut generics.args, ignore, out);
                     }
                     syn::PathArguments::Parenthesized(generics) => {
                         for ty in &mut generics.inputs {
-                            process_type(cx, span, ty, ignore, out);
+                            process_type(ty, ignore, out);
                         }
                     }
                     _ => {}
@@ -616,8 +632,6 @@ fn process_type<'ty>(
 }
 
 fn process_generic_type<'ty, P>(
-    cx: &Ctxt,
-    span: Span,
     generics: &mut Punctuated<syn::GenericArgument, P>,
     ignore: &HashSet<syn::Ident>,
     out: &mut Vec<(Span, Option<syn::Lifetime>)>,
@@ -634,12 +648,12 @@ fn process_generic_type<'ty, P>(
                 // inference, because the `ToOwned::Owned` variant will be the
                 // same regardless.
                 out.push((
-                    span,
+                    lt.span(),
                     Some(mem::replace(lt, syn::Lifetime::new(STATIC_LT, lt.span()))),
                 ));
             }
             syn::GenericArgument::Type(ty) => {
-                process_type(cx, span, ty, ignore, out);
+                process_type(ty, ignore, out);
             }
             _ => {}
         }
