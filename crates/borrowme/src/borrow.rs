@@ -76,7 +76,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 ///
 /// A catch here is that `Borrow` can only be implemented once for each time,
 /// compared to [`Borrow<T>`][std::borrow::Borrow]. But for our purposes this is
-/// fine. This crate is primarily intended to work with two symmetrical types.
+/// fine. This crate is primarily intended to work with two symmetrical types
+/// and any deviation from that pattern can be handled by customizing the
+/// behavior of the [`#[borrowme]`][crate::borrowme] attribute.
 ///
 /// [generic `Target`]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
 pub trait Borrow {
