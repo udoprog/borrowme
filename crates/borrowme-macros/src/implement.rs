@@ -417,7 +417,9 @@ fn process_fields(
                 // For non-copy types, build an expression that tries to use the
                 // `ToOwned` implementation to figure out which type to use.
                 match type_hint {
-                    TypeHint::None if attr.ty.owned.is_none() && !is_std_ref => {
+                    TypeHint::None
+                        if attr.ty.owned.is_none() && !is_std_ref && !lifetimes.is_empty() =>
+                    {
                         let mut path = cx.borrowme_to_owned_t.clone();
 
                         path.segments.push(syn::PathSegment::from(syn::Ident::new(

@@ -25,9 +25,8 @@
 //! struct Word<'a> {
 //!     text: &'a str,
 //!     lang: Option<&'a str>,
-//!     examples: Vec<&'a str>,
+//!     examples: Vec<String>,
 //! }
-//!
 //! ```
 //!
 //! With this we get the following additional structs and trait implementations:
