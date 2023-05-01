@@ -22,7 +22,7 @@ error[E0277]: the trait bound `MyOwnedType: Clone` is not satisfied
    |          ----- in this derive macro expansion
 ...
 13 |     lang: &'a MyType,
-   |     ^^^^ the trait `Clone` is not implemented for `MyOwnedType`
+   |     ^^^^^^^ the trait `Clone` is not implemented for `MyOwnedType`
    |
    = note: this error originates in the derive macro `Clone` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Clone)]`
@@ -37,7 +37,7 @@ error[E0277]: `MyOwnedType` doesn't implement `Debug`
    |                 ----- in this derive macro expansion
 ...
 13 |     lang: &'a MyType,
-   |     ^^^^ `MyOwnedType` cannot be formatted using `{:?}`
+   |     ^^^^^^^ `MyOwnedType` cannot be formatted using `{:?}`
    |
    = help: the trait `Debug` is not implemented for `MyOwnedType`
    = note: add `#[derive(Debug)]` to `MyOwnedType` or manually `impl Debug for MyOwnedType`

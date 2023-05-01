@@ -371,12 +371,14 @@ fn process_fields(
     access: Access,
     o_fields: &mut syn::Fields,
     b_fields: &mut syn::Fields,
-    to_owned_entries: &mut Vec<syn::FieldValue>,
-    borrow_entries: &mut Vec<syn::FieldValue>,
+    to_owned_entries: &mut Vec<TokenStream>,
+    borrow_entries: &mut Vec<TokenStream>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
-        let field_spans = field_spans(o_field);
-        let mut attr = attr::field(cx, field_spans, &o_field.attrs)?;
+        let field_ty_spans = field_ty_spans(o_field);
+        let field_spans = field_spans(o_field, field_ty_spans.1);
+
+        let mut attr = attr::field(cx, field_ty_spans, &o_field.attrs)?;
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
 
@@ -431,7 +433,7 @@ fn process_fields(
                             path,
                         });
 
-                        attr.ty = attr::FieldType::Type(Respan::new(ty, field_spans));
+                        attr.ty = attr::FieldType::Type(Respan::new(ty, field_ty_spans));
                     }
                     TypeHint::Copy => {
                         attr.ty = attr::FieldType::Copy;
@@ -463,38 +465,45 @@ fn process_fields(
             binding: &binding,
         };
 
-        to_owned_entries.push(syn::FieldValue {
-            attrs: Vec::new(),
-            member: binding.as_member(),
-            colon_token: Some(<Token![:]>::default()),
-            expr: to_owned.as_expr(&bound),
-        });
+        let member = binding.as_member();
 
-        borrow_entries.push(syn::FieldValue {
-            attrs: Vec::new(),
-            member: binding.as_member(),
-            colon_token: Some(<Token![:]>::default()),
-            expr: borrow.as_expr(&bound),
-        });
+        let to_owned = Respan::new(to_owned.as_expr(&bound), field_spans);
+        to_owned_entries.push(quote!(#member: #to_owned));
+        let borrow = Respan::new(borrow.as_expr(&bound), field_spans);
+        borrow_entries.push(quote!(#member: #borrow));
     }
 
     Ok(())
 }
 
 /// Calculate the field span to use for diagnostics such as when there is a type mismatch.
-fn field_spans(field: &syn::Field) -> (Span, Span) {
-    let end = field.ty.span();
-
+fn field_spans(field: &syn::Field, end: Span) -> (Span, Span) {
     let start = match &field.vis {
         syn::Visibility::Public(tok) => tok.span(),
         syn::Visibility::Restricted(tok) => tok.span(),
         syn::Visibility::Inherited => match &field.ident {
-            Some(field) => field.span(),
+            Some(ident) => ident.span(),
             None => end,
         },
     };
 
     (start, end)
+}
+
+/// Calculate the field type span to use for diagnostics such as when there is a
+/// type mismatch.
+fn field_ty_spans(field: &syn::Field) -> (Span, Span) {
+    let start = field.ty.span();
+    let end = end_span(&field.ty).unwrap_or(start);
+    (start, end)
+}
+
+/// Calculate the end span to use for a token stream.
+fn end_span<T>(tokens: &T) -> Option<Span>
+where
+    T: ToTokens,
+{
+    Some(tokens.to_token_stream().into_iter().last()?.span())
 }
 
 /// Apply attributes to the appropriate variant.
