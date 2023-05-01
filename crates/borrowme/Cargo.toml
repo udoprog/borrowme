@@ -13,6 +13,10 @@ license = "MIT/Apache-2.0"
 keywords = ["borrow", "lifetime", "macros"]
 categories = ["development-tools", "no-std", "rust-patterns"]
 
+[features]
+default = ["std"]
+std = []
+
 [dependencies]
 borrowme-macros = { path = "../borrowme-macros", version = "=0.0.6" }
 

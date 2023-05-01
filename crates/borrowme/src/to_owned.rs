@@ -1,5 +1,7 @@
-use std::collections::HashSet;
-use std::hash::Hash;
+#[cfg(feature = "std")]
+use core::hash::Hash;
+#[cfg(feature = "std")]
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 
 /// Convert a type to owned.
 ///
@@ -80,12 +82,13 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl ToOwned for str {
     type Owned = String;
 
     #[inline]
     fn to_owned(&self) -> Self::Owned {
-        std::borrow::ToOwned::to_owned(self)
+        String::from(self)
     }
 }
 
@@ -101,39 +104,117 @@ where
     }
 }
 
-impl<T> ToOwned for Vec<T>
+#[cfg(feature = "std")]
+impl<T> ToOwned for [T]
 where
-    T: ToOwned,
+    T: Clone,
 {
-    type Owned = Vec<T::Owned>;
+    type Owned = Vec<T>;
 
     #[inline]
     fn to_owned(&self) -> Self::Owned {
-        let mut out = Vec::with_capacity(self.len());
-
-        for value in self.iter() {
-            out.push(value.to_owned());
-        }
-
-        out
+        self.to_vec()
     }
 }
 
-impl<T> ToOwned for HashSet<T>
-where
-    T: ToOwned,
-    T::Owned: Hash + Eq,
-{
-    type Owned = HashSet<T::Owned>;
+macro_rules! seq {
+    (cap $seq:ident, $insert:ident $(, $trait:path)* $(,)?) => {
+        #[cfg(feature = "std")]
+        impl<T> ToOwned for $seq<T>
+        where
+            T: ToOwned,
+            $(T::Owned: $trait,)*
+        {
+            type Owned = $seq<T::Owned>;
 
-    #[inline]
-    fn to_owned(&self) -> Self::Owned {
-        let mut out = HashSet::with_capacity(self.len());
+            #[inline]
+            fn to_owned(&self) -> Self::Owned {
+                let mut out = <$seq<T::Owned>>::with_capacity(self.len());
 
-        for value in self.iter() {
-            out.insert(value.to_owned());
+                for value in self.iter() {
+                    out.$insert(value.to_owned());
+                }
+
+                out
+            }
         }
+    };
 
-        out
-    }
+    ($seq:ident, $insert:ident $(, $trait:path)* $(,)?) => {
+        #[cfg(feature = "std")]
+        impl<T> ToOwned for $seq<T>
+        where
+            T: ToOwned,
+            $(T::Owned: $trait,)*
+        {
+            type Owned = $seq<T::Owned>;
+
+            #[inline]
+            fn to_owned(&self) -> Self::Owned {
+                let mut out = <$seq<T::Owned>>::new();
+
+                for value in self.iter() {
+                    out.$insert(value.to_owned());
+                }
+
+                out
+            }
+        }
+    };
 }
+
+macro_rules! map {
+    (cap $map:ident, $insert:ident $(, $trait:path)* $(,)?) => {
+        #[cfg(feature = "std")]
+        impl<K, V> ToOwned for $map<K, V>
+        where
+            K: ToOwned,
+            V: ToOwned,
+            $(K::Owned: $trait,)*
+        {
+            type Owned = $map<K::Owned, V::Owned>;
+
+            #[inline]
+            fn to_owned(&self) -> Self::Owned {
+                let mut out = <$map<_, _>>::with_capacity(self.len());
+
+                for (key, value) in self.iter() {
+                    out.$insert(key.to_owned(), value.to_owned());
+                }
+
+                out
+            }
+        }
+    };
+
+    ($map:ident, $insert:ident $(, $trait:path)* $(,)?) => {
+        #[cfg(feature = "std")]
+        impl<K, V> ToOwned for $map<K, V>
+        where
+            K: ToOwned,
+            V: ToOwned,
+            $(K::Owned: $trait,)*
+        {
+            type Owned = $map<K::Owned, V::Owned>;
+
+            #[inline]
+            fn to_owned(&self) -> Self::Owned {
+                let mut out = <$map<_, _>>::new();
+
+                for (key, value) in self.iter() {
+                    out.$insert(key.to_owned(), value.to_owned());
+                }
+
+                out
+            }
+        }
+    };
+}
+
+seq!(cap HashSet, insert, Hash, Eq);
+seq!(cap Vec, push);
+seq!(BTreeSet, insert, PartialOrd, Ord, Eq);
+seq!(LinkedList, push_back);
+
+map!(cap HashMap, insert, Hash, Eq);
+map!(BTreeMap, insert, PartialOrd, Ord, Eq);

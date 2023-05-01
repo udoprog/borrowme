@@ -1,0 +1,11 @@
+error[E0425]: cannot find function `as_slice` in module `std::slice`
+ --> tests/ui/missing_path_hint.rs:5:42
+  |
+5 |     #[borrowme(borrow_with = std::slice::as_slice)]
+  |                                          ^^^^^^^^ not found in `std::slice`
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/ui/missing_path_hint.rs:7:2
+  |
+7 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/ui/missing_path_hint.rs`

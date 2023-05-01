@@ -70,6 +70,8 @@
 //! [std-borrow]: std::borrow::Borrow
 //! [std-to-owned]: std::borrow::ToOwned
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 /// Automatically build an *owned* variant of a type and implement [`ToOwned`] and
 /// [`Borrow`].
 ///
@@ -120,6 +122,33 @@
 ///
 /// <br>
 ///
+/// ## Implementing for asymmetric types
+///
+/// Some common types need special care because their [`ToOwned`] and [`Borrow`]
+/// implementations are asymmetric, that is that the [`Borrow::Target`] does not
+/// match the type that implements [`ToOwned`]. This is easily addressed by
+/// overriding the borrow implementation with [`#[borrowme(borrow_with =
+/// <path>)]`][borrow_with].
+///
+/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
+///
+/// #### `&[T]`
+///
+/// The `ToOwned` implementation produces a `Vec<T>`, while borrowing that
+/// produces a `Vec<&T::Target>`. This can be fixed using [`Vec::as_slice`].
+///
+/// ```
+/// use borrowme::borrowme;
+///
+/// #[borrowme]
+/// struct VecField<'a> {
+///     #[borrowme(borrow_with = Vec::as_slice)]
+///     strings: &'a [String],
+/// }
+/// ```
+///
+/// <br>
+///
 /// ## Why isn't this a derive?
 ///
 /// A derive macro can't see other attributes than the ones it declares as its
@@ -131,7 +160,7 @@
 ///
 /// This should hopefully illustrate the issue:
 ///
-/// ```
+/// ```no_compile
 /// use borrow::{ToOwned, Borrow};
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq, ToOwned)]
