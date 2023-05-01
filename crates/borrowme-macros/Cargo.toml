@@ -1,0 +1,22 @@
+[package]
+name = "borrowme-macros"
+version = "0.0.1"
+authors = ["John-John Tedro <udoprog@tedro.se>"]
+edition = "2018"
+rust-version = "1.65"
+description = "The missing compositional borrowing for Rust."
+documentation = "https://docs.rs/borrowme"
+readme = "README.md"
+homepage = "https://github.com/udoprog/borrowme"
+repository = "https://github.com/udoprog/borrowme"
+license = "MIT/Apache-2.0"
+keywords = ["macros", "borrow", "lifetime"]
+categories = ["no-std", "development-tools", "rust-patterns"]
+
+[dependencies]
+syn = { version = "2.0.15", features = ["full", "parsing"] }
+proc-macro2 = "1.0.56"
+quote = "1.0.26"
+
+[lib]
+proc-macro = true
