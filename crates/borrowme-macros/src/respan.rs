@@ -33,7 +33,10 @@ where
 fn respan(stream: TokenStream, spans: (Span, Span)) -> TokenStream {
     let mut it = stream.into_iter();
     let first = it.next().map(|t| inner(t, spans.0));
-    first.into_iter().chain(it.map(|t| inner(t, spans.1))).collect()
+    first
+        .into_iter()
+        .chain(it.map(|t| inner(t, spans.1)))
+        .collect()
 }
 
 fn respan_stream(stream: TokenStream, span: Span) -> TokenStream {

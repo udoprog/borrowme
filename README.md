@@ -7,79 +7,64 @@
 
 The missing compositional borrowing for Rust.
 
-This crate provides an attribute macro which helps you pair two types
-through compositional borrowing and ownership conversion. Roughly this means
-that you can convert a struct which has lifetimes into ones which does not
-and such as between the `Word` and `OwnedWord` structs here:
+Rust comes with two sibling traits which that can convert from owned to
+borrowed and vice versa: [`ToOwned`][std-to-owned] and
+[`Borrow`][std-borrow].
+
+These can convert most simple types such as `&str` to and from `String`. But
+lets think of this in a broader perspective. How to we convert a type that
+*has lifetimes*, to one which *does not*? This crate defines its own
+[`ToOwned`] and [`Borrow`] traits which serve a similar purpose to the ones
+in `std` but are implemented so that they can do this generically.
+
+To help us implement these traits the [`#[borrowme]`][borrowme] attribute
+macro is provided ([see this section][borrowme-derive] for why it's not a
+derive macro).
 
 ```rust
-#[derive(Debug, PartialEq, Eq)]
+#[borrowme]
+#[derive(Debug, Clone)]
 struct Word<'a> {
     text: &'a str,
     lang: Option<&'a str>,
     examples: Vec<&'a str>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+```
+
+With this we get the following additional structs and trait implementations:
+
+```rust
+#[derive(Debug, Clone)]
 struct OwnedWord {
     text: String,
     lang: Option<String>,
     examples: Vec<String>,
 }
-```
 
-Writing and maintaining the `OwnedWord` variant is labour intensive and
-error prone. Instead we can use the [`#[borrowme]`][borrowme] attribute
-provided by this crate:
+impl borrowme::ToOwned for Word<'_> {
+    type Owned = OwnedWord;
 
-```rust
-use borrowme::borrowme;
-
-#[borrowme]
-#[derive(Debug, PartialEq, Eq)]
-struct Word<'a> {
-    text: &'a str,
-    lang: Option<&'a str>,
-    examples: Vec<&'a str>,
+    fn to_owned(&self) -> OwnedWord {
+        /* .. */
+    }
 }
-```
 
-See the [`#[borrowme]`][borrowme] attribute for detailed documentation on
-how the attribute works.
+impl borrowme::Borrow for OwnedWord {
+    type Target<'a> = Word<'a>;
 
-```rust
-let text = String::from("Hello");
-let lang = Some(String::from("eng"));
-let examples = vec![String::from("Hello World")];
-
-let word = Word {
-    text: "Hello World",
-    lang: lang.as_deref(),
-    examples: examples.iter().map(|s| s.as_str()).collect(),
-};
-
-let word2: OwnedWord = borrowme::to_owned(&word);
-let word3: Word<'_> = borrowme::borrow(&word2);
-assert_eq!(word3, word);
+    fn borrow(&self) -> Word<'_> {
+        /* .. */
+    }
+}
 ```
 
 <br>
 
-Rust comes with two sibling traits which both are responsible for converting
-something to an owned and a borrowed variant: [`ToOwned`][std-to-owned] and
-[`Borrow`][std-borrow].
-
-These convert a type to a *borrowed* value to an owned one, let's think
-about it from a broader perspective: How to we convert a type which *has
-lifetimes*, to one which *does not*?
-
-To this end this crate defines two similar traits: [`ToOwned`] and
-[`Borrow`]. These traits serve a similar purpose to the traits in `std` but
-are implemented differently. See their corresponding documentation for more
-details.
-
+[`Borrow`]: https://docs.rs/borrowme/latest/borrowme/trait.Borrow.html
 [`ToOwned`]: https://docs.rs/borrowme/latest/borrowme/trait.ToOwned.html
-[generic associated types]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
+[borrowme-derive]: https://docs.rs/borrowme/latest/borrowme/attr.borrowme.html#why-isnt-this-a-derive
 [borrowme]: https://docs.rs/borrowme/latest/borrowme/attr.borrowme.html
+[generic associated types]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
 [std-borrow]: std::borrow::Borrow
 [std-to-owned]: std::borrow::ToOwned
