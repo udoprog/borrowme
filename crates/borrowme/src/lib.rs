@@ -112,9 +112,20 @@
 ///
 /// ## Container attributes
 ///
-/// Container attributes are attributes which does directly on the container,
-/// such as attributes associated with a struct or an enum. Such as
-/// `#[borrowme(prefix = Prefix)]` below.
+/// The following section documents all the supported container attributes:
+/// * [`#[borrowme(prefix = <ident>)]`][prefix] which is used to change the prefix of the
+///   generated *owned* variant.
+/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
+///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
+///   attributes.
+///
+/// [prefix]: #borrowmeprefix--ident-container-attribute
+/// [borrowed_attr]: #borrowed_attrmeta-container-attribute
+/// [owned_attr]: #owned_attrmeta-container-attribute
+///
+/// Container attributes are attributes which are added to a container, such as
+/// a `struct` or an `enum`. See for example `#[borrowme(prefix = Prefix)]`
+/// below:
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -134,7 +145,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowme(prefix = <ident>)]`
+/// #### `#[borrowme(prefix = <ident>)]` container attribute
 ///
 /// This allows you to pick the prefix to use for the generated type. By default
 /// this is `Owned`.
@@ -161,7 +172,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowed_attr(<meta>)]`
+/// #### `#[borrowed_attr(<meta>)]` container attribute
 ///
 /// Apply the given `<meta>` to a container attribute, but only for the
 /// *borrowed* variant.
@@ -185,7 +196,7 @@
 ///
 /// <br>
 ///
-/// #### `#[owned_attr(<meta>)]`
+/// #### `#[owned_attr(<meta>)]` container attribute
 ///
 /// Apply the given given `<meta>` to a container, but only to the owned
 /// variant.
@@ -211,11 +222,19 @@
 ///
 /// ## Variant attributes
 ///
-/// Variant attributes are attributes which apply to enum variants.
+/// The following section documents all the available variant attributes:
+/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
+///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
+///   attributes.
+///
+/// Variant attributes are attributes which apply to `enum` variants.
+///
+/// [borrowed_attr]: #borrowed_attrmeta-variant-attribute
+/// [owned_attr]: #owned_attrmeta-variant-attribute
 ///
 /// <br>
 ///
-/// #### `#[borrowed_attr(<meta>)]`
+/// #### `#[borrowed_attr(<meta>)]` variant attribute
 ///
 /// Apply the given `<meta>` to a variant attribute, but only for the *borrowed*
 /// variant.
@@ -236,7 +255,7 @@
 ///
 /// <br>
 ///
-/// #### `#[owned_attr(<meta>)]`
+/// #### `#[owned_attr(<meta>)]` variant attribute
 ///
 /// Apply the given `<meta>` to a variant attribute, but only for the *owned*
 /// variant.
@@ -259,12 +278,33 @@
 ///
 /// ## Field attributes
 ///
+/// The following section documents all the available field attributes:
+/// * [`#[owned(<type>)]` or `#[selectme(owned = <type>)]`][owned] which is a
+///   required attribute for specifying the owned type a field is being
+///   converted into.
+/// * [`#[borrowme(to_owned_with = <path>)]`][to_owned_with],
+///   [`#[borrowme(borrow_with = <path>)]`][borrow_with], and [`#[borrowme(with
+///   = <path>)]`][with] which are used for customizing behavior.
+/// * [`#[copy]`][copy] which is used to indicate that the field is `Copy` and
+///   does not require conversion.
+/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
+///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
+///   attributes.
+///
 /// Field attributes are attributes which apply to fields, such as the fields in
 /// a struct.
 ///
 /// <br>
 ///
-/// #### `#[owned(<type>)]` or `#[selectme(owned = <type>)]`
+/// [owned]: #ownedtype-or-selectmeowned--type-field-attributes
+/// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
+/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
+/// [with]: #borrowmewith--path-field-attribute
+/// [copy]: #copy-field-attribute
+/// [borrowed_attr]: #borrowed_attrmeta-field-attribute
+/// [owned_attr]: #owned_attrmeta-field-attribute
+///
+/// #### `#[owned(<type>)]` or `#[selectme(owned = <type>)]` field attributes
 ///
 /// This specifies the owned type of the field. The latter variation is
 /// available so that it looks better when combined with other attributes.
@@ -281,7 +321,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowme(to_owned_with = <path>)]`
+/// #### `#[borrowme(to_owned_with = <path>)]` field attribute
 ///
 /// Specifies a path to use when making a field owned. By default this is:
 /// * `::core::clone::Clone::clone` if `#[owned(<type>)]` is not specified.
@@ -305,7 +345,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowme(borrow_with = <path>)]`
+/// #### `#[borrowme(borrow_with = <path>)]` field attribute
 ///
 /// Specifies a path to use when making a field owned. By default this is:
 /// * A borrowed `&self.<field>` if `#[owned(<type>)]` is not specified.
@@ -332,7 +372,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowme(with = <path>)]`
+/// #### `#[borrowme(with = <path>)]` field attribute
 ///
 /// Specifies a path to use when calling `to_owned` and `borrow` on a field.
 ///
@@ -379,7 +419,7 @@
 ///
 /// <br>
 ///
-/// #### `#[copy]`
+/// #### `#[copy]` field attribute
 ///
 /// Indicates that the field type is `Copy`, if this is set then the value is
 /// not cloned when the type is converted to and from its owned variant.
@@ -397,7 +437,7 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowed_attr(<meta>)]`
+/// #### `#[borrowed_attr(<meta>)]` field attribute
 ///
 /// Apply the given `<meta>` to a field attribute, but only for the *borrowed*
 /// variant. This allows certain attributes that are only needed for the
@@ -418,7 +458,7 @@
 ///
 /// <br>
 ///
-/// #### `#[owned_attr(<meta>)]`
+/// #### `#[owned_attr(<meta>)]` field attribute
 ///
 /// Apply the given `<meta>` to a field attribute, but only for the *owned*
 /// variant. This allows certain attributes that are only needed for the owned
