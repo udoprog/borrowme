@@ -1,9 +1,9 @@
 use borrowme::borrowme;
 
 #[borrowme]
-#[borrowed(attr(derive(Default)))]
+#[borrowed_attr(derive(Default))]
 enum ImplementDefault<'a> {
-    #[borrowed(attr(default))]
+    #[borrowed_attr(default)]
     Empty,
-    Other(#[owned(ty = String)] &'a str),
+    Other(#[owned(String)] &'a str),
 }

@@ -15,9 +15,9 @@
 //! #[borrowme::borrowme]
 //! #[derive(Debug, PartialEq, Eq)]
 //! struct Word<'a> {
-//!     #[owned(ty = String)]
+//!     #[owned(String)]
 //!     text: &'a str,
-//!     #[owned(ty = Option<String>)]
+//!     #[owned(Option<String>)]
 //!     lang: Option<&'a str>,
 //! }
 //!
@@ -71,7 +71,7 @@
 /// #[borrowme]
 /// #[derive(Serialize)]
 /// pub struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     lang: &'a str,
 /// }
 ///
@@ -90,7 +90,7 @@
 /// #[derive(Serialize)]
 /// #[borrowme]
 /// pub struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     lang: &'a str,
 /// }
 ///
@@ -108,40 +108,37 @@
 ///
 /// Container attributes are attributes which does directly on the container,
 /// such as attributes associated with a struct or an enum. Such as
-/// `#[owned(prefix = Prefix)]` below.
+/// `#[borrowme(prefix = Prefix)]` below.
 ///
 /// ```
 /// # use borrowme::borrowme;
-/// #[borrowme]
-/// #[owned(prefix = Prefix)]
+/// #[borrowme(prefix = Prefix)]
 /// struct Struct<'a> {
 ///     /* body */
-///  # #[owned(ty = String)] text: &'a str,
+///  # #[owned(String)] text: &'a str,
 /// }
 ///
-/// #[borrowme]
-/// #[owned(prefix = Prefix)]
+/// #[borrowme(prefix = Prefix)]
 /// enum Enum<'a> {
 ///     /* body */
-/// # First { #[owned(ty = String)] text: &'a str },
-/// # Second { #[owned(ty = String)] text: &'a str },
+/// # First { #[owned(String)] text: &'a str },
+/// # Second { #[owned(String)] text: &'a str },
 /// }
 /// ```
 ///
 /// <br>
 ///
-/// #### `#[owned(prefix = <ident>)]`
+/// #### `#[borrowme(prefix = <ident>)]`
 ///
 /// This allows you to pick the prefix to use for the generated type. By default
 /// this is `Owned`.
 ///
 /// ```
 /// # use borrowme::borrowme;
-/// #[borrowme]
-/// #[owned(prefix = Prefix)]
+/// #[borrowme(prefix = Prefix)]
 /// #[derive(Debug, PartialEq)]
 /// struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -158,16 +155,16 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowed(attr(<meta>))]`
+/// #### `#[borrowed_attr(<meta>)]`
 ///
 /// Only apply the given `<meta>` to the borrowed variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
 /// #[borrowme]
-/// #[borrowed(attr(derive(Clone)))]
+/// #[borrowed_attr(derive(Clone))]
 /// struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -181,16 +178,16 @@
 ///
 /// <br>
 ///
-/// #### `#[owned(attr(<meta>))]`
+/// #### `#[owned_attr(<meta>)]`
 ///
-/// Only apply the given `<meta>` to the owned variant.
+/// Apply the given given `<meta>`, but only to the owned variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
 /// #[borrowme]
-/// #[owned(attr(derive(Clone)))]
+/// #[owned_attr(derive(Clone))]
 /// struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     text: &'a str,
 /// }
 ///
@@ -211,17 +208,34 @@
 ///
 /// <br>
 ///
-/// #### `#[owned(to_owned = <path>)]`
+/// #### `#[owned(<type>)]` or `#[selectme(owned = <type>)]`
 ///
-/// Specifies a path to use when making a field owned. By default this is
-/// `::borrowme::ToOwned::to_owned` unless `#[owned(copy)]` is specified.
+/// This specifies the owned type of the field. The latter variation is
+/// available so that it looks better when combined with other attributes.
 ///
 /// ```
 /// # use borrowme::borrowme;
 /// #[borrowme]
 /// #[derive(Clone, Debug)]
 /// pub struct Word<'a> {
-///     #[owned(ty = Option<String>, to_owned_with = option_to_owned)]
+///     #[owned(String)]
+///     lang: &'a str,
+/// }
+/// ```
+///
+/// #### `#[owned(to_owned_with = <path>)]`
+///
+/// Specifies a path to use when making a field owned. By default this is:
+/// * `::core::clone::Clone::clone` if `#[owned(<type>)]` is not specified.
+/// * `::borrowme::ToOwned::to_owned` if `#[owned(<type>)]` is specified.
+/// * An owned `self.<field>` expression if `#[copy]` is specified.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// #[derive(Clone, Debug)]
+/// pub struct Word<'a> {
+///     #[borrowme(owned = Option<String>, to_owned_with = option_to_owned)]
 ///     lang: Option<&'a str>,
 /// }
 ///
@@ -231,20 +245,24 @@
 /// }
 /// ```
 ///
+/// <br>
+///
 /// #### `#[owned(borrow_with = <path>)]`
 ///
-/// Specifies a path to use when borrowing a field. By default this is
-/// `::borrowme::Borrowed::borrow` unless `#[owned(copy)]` is specified.
+/// Specifies a path to use when making a field owned. By default this is:
+/// * A borrowed `&self.<field>` if `#[owned(<type>)]` is not specified.
+/// * `::borrowme::Borrowed::borrow` if `#[owned(<type>)]` is specified.
+/// * An owned `self.<field>` expression if `#[copy]` is specified.
 ///
 /// ```
 /// # use borrowme::borrowme;
 /// #[borrowme]
 /// #[derive(Clone, Debug)]
 /// pub struct Word<'a> {
-///     #[owned(ty = Option<String>, borrow_with = option_borrow)]
+///     #[borrowme(owned = Option<String>, borrow_with = option_borrow)]
 ///     lang: Option<&'a str>,
 ///     // Note that the above works the same as `Option::as_deref`.
-///     #[owned(ty = Option<String>, borrow_with = Option::as_deref)]
+///     #[borrowme(owned = Option<String>, borrow_with = Option::as_deref)]
 ///     lang2: Option<&'a str>,
 /// }
 ///
@@ -268,9 +286,9 @@
 /// #[borrowme]
 /// #[derive(Clone, Debug)]
 /// pub struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     text: &'a str,
-///     #[owned(ty = Option<String>, with = self::option)]
+///     #[borrowme(owned = Option<String>, with = self::option)]
 ///     lang: Option<&'a str>,
 /// }
 ///
@@ -301,7 +319,7 @@
 ///
 /// <br>
 ///
-/// #### `#[owned(copy)]`
+/// #### `#[copy]`
 ///
 /// Indicates that the field type is `Copy`, if this is set then the value is
 /// not cloned when the type is converted to and from its owned variant.
@@ -310,16 +328,16 @@
 /// # use borrowme::borrowme;
 /// #[borrowme]
 /// pub struct Word<'a> {
-///     #[owned(ty = String)]
+///     #[owned(String)]
 ///     text: &'a str,
-///     #[owned(copy)]
+///     #[copy]
 ///     teineigo: bool,
 /// }
 /// ```
 ///
 /// <br>
 ///
-/// #### `#[borrowed(attr(<meta>))]`
+/// #### `#[borrowed_attr(<meta>)]`
 ///
 /// Apply the given attribute `<meta>` to a field, but only for the *borrowed*
 /// variant. This allows certain attributes that are only needed for the
@@ -332,13 +350,13 @@
 /// #[borrowme]
 /// #[derive(Serialize, Deserialize)]
 /// pub struct Word<'a> {
-///     #[owned(ty = Option<String>)]
-///     #[borrowed(attr(serde(borrow)))]
+///     #[owned(Option<String>)]
+///     #[borrowed_attr(serde(borrow))]
 ///     lang: Option<&'a str>,
 /// }
 /// ```
 ///
-/// #### `#[borrowed(attr(<meta>))]`
+/// #### `#[owned_attr(<meta>)]`
 ///
 /// Apply the given attribute `<meta>` to a field, but only for the *owned*
 /// variant. This allows certain attributes that are only needed for the

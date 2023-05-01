@@ -2,7 +2,7 @@ use borrowme::borrowme;
 
 #[borrowme]
 struct LifetimeHint<'a, 'b> {
-    #[owned(ty = String)]
+    #[owned(String)]
     a: &'a str,
     b: &'b str,
 }

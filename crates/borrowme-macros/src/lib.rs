@@ -7,6 +7,7 @@ mod ctxt;
 mod implement;
 
 use ctxt::Ctxt;
+use proc_macro2::Span;
 use syn::spanned::Spanned;
 
 #[proc_macro_attribute]
@@ -14,12 +15,32 @@ pub fn borrowme(
     attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let attr = attr.into();
     let item = syn::parse_macro_input!(item as syn::Item);
+
+    let attr_list;
+
+    let attr = if !attr.is_empty() {
+        // Synthesize a fake attribute so we can used attribute arguments which
+        // were passed in when parsing arguments.
+        attr_list = [syn::Attribute {
+            pound_token: <syn::Token![#]>::default(),
+            style: syn::AttrStyle::Outer,
+            bracket_token: <syn::token::Bracket>::default(),
+            meta: syn::Meta::List(syn::MetaList {
+                path: syn::Path::from(syn::Ident::new(attr::BORROWME, Span::call_site())),
+                delimiter: syn::MacroDelimiter::Paren(syn::token::Paren::default()),
+                tokens: attr.into(),
+            }),
+        }];
+
+        &attr_list[..]
+    } else {
+        &[]
+    };
 
     let cx = Ctxt::new(item.span());
 
-    if let Ok(stream) = implement::implement(&cx, &attr, item) {
+    if let Ok(stream) = implement::implement(&cx, attr, item) {
         if !cx.has_errors() {
             return stream.into();
         }

@@ -2,8 +2,8 @@ use borrowme::borrowme;
 
 #[borrowme]
 struct MultipleLifetimes<'a, 'b> {
-    #[owned(ty = String)]
+    #[owned(String)]
     a: &'a str,
-    #[owned(ty = String)]
+    #[owned(String)]
     b: &'b str,
 }

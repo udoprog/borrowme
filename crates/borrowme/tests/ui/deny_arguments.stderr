@@ -1,5 +1,0 @@
-error: #[borrowme]: Arguments are not supported
- --> tests/ui/deny_arguments.rs:3:12
-  |
-3 | #[borrowme(prefix = Owned)]
-  |            ^^^^^^

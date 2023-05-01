@@ -156,21 +156,14 @@ impl Call<'_> {
 
 pub(crate) fn implement(
     cx: &Ctxt,
-    attr: &TokenStream,
+    attrs: &[syn::Attribute],
     mut item: syn::Item,
 ) -> Result<TokenStream, ()> {
     let mut output = item.clone();
 
-    if !attr.is_empty() {
-        cx.span_error(
-            attr.span(),
-            format_args!("{NAME}: Arguments are not supported"),
-        );
-    }
-
     let (to_owned_fn, borrow_fn) = match (&mut output, &mut item) {
         (syn::Item::Struct(o_st), syn::Item::Struct(b_st)) => {
-            let attr = attr::container(cx, &o_st.ident, &o_st.attrs)?;
+            let attr = attr::container(cx, &o_st.ident, attrs, &o_st.attrs)?;
             attr::strip([&mut o_st.attrs, &mut b_st.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_st.attrs, &mut b_st.attrs);
@@ -214,7 +207,7 @@ pub(crate) fn implement(
             (to_owned_fn, borrow_fn)
         }
         (syn::Item::Enum(o_en), syn::Item::Enum(b_en)) => {
-            let attr = attr::container(cx, &o_en.ident, &o_en.attrs)?;
+            let attr = attr::container(cx, &o_en.ident, attrs, &o_en.attrs)?;
             attr::strip([&mut o_en.attrs, &mut b_en.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_en.attrs, &mut b_en.attrs);
@@ -436,7 +429,7 @@ fn apply_attributes(
     owned_attrs: &mut Vec<syn::Attribute>,
     borrowed_attrs: &mut Vec<syn::Attribute>,
 ) {
-    if let Some(meta) = &attributes.owned {
+    for meta in &attributes.own {
         owned_attrs.push(syn::Attribute {
             pound_token: <Token![#]>::default(),
             style: syn::AttrStyle::Outer,
@@ -445,7 +438,7 @@ fn apply_attributes(
         });
     }
 
-    if let Some(meta) = &attributes.borrowed {
+    for meta in &attributes.borrow {
         borrowed_attrs.push(syn::Attribute {
             pound_token: <Token![#]>::default(),
             style: syn::AttrStyle::Outer,

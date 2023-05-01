@@ -3,9 +3,9 @@ use borrowme::borrowme;
 #[borrowme]
 enum Enum<'a> {
     Variant {
-        #[owned(ty = String)]
+        #[owned(String)]
         a: &'a str,
     },
-    Unnamed(#[owned(ty = String)] &'a str),
+    Unnamed(#[owned(String)] &'a str),
     Empty,
 }

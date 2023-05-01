@@ -1,20 +1,24 @@
 use syn::meta::ParseNestedMeta;
+use syn::parse::ParseStream;
 use syn::spanned::Spanned;
 use syn::Token;
 
 use crate::ctxt::Ctxt;
 
-/// The name of the attribute being processed.
+pub(crate) const COPY: &str = "copy";
+pub(crate) const BORROWME: &str = "borrowme";
+pub(crate) const BORROWED_ATTR: &str = "borrowed_attr";
+pub(crate) const OWNED_ATTR: &str = "owned_attr";
 pub(crate) const OWNED: &str = "owned";
-/// The name of the attribute being processed.
-pub(crate) const BORROWED: &str = "borrowed";
+
+const STRIP: [&str; 5] = [COPY, BORROWED_ATTR, OWNED_ATTR, BORROWME, OWNED];
 
 #[derive(Default)]
 pub(crate) struct Attributes {
     // Attributes to only include on the owned variant.
-    pub(crate) owned: Option<syn::Meta>,
+    pub(crate) own: Vec<syn::Meta>,
     // Attributes to only include on the borrowed variant.
-    pub(crate) borrowed: Option<syn::Meta>,
+    pub(crate) borrow: Vec<syn::Meta>,
 }
 
 /// Container attributes.
@@ -29,16 +33,17 @@ pub(crate) struct Container {
 pub(crate) fn container(
     cx: &Ctxt,
     ident: &syn::Ident,
-    attrs: &Vec<syn::Attribute>,
+    attrs: &[syn::Attribute],
+    rest: &[syn::Attribute],
 ) -> Result<Container, ()> {
     let mut attr = Container {
         owned_ident: quote::format_ident!("Owned{}", ident),
         attributes: Attributes::default(),
     };
 
-    for a in attrs {
-        if a.path().is_ident(OWNED) {
-            let result = a.parse_nested_meta(|meta| {
+    for a in attrs.iter().chain(rest) {
+        let result = if a.path().is_ident(BORROWME) {
+            a.parse_nested_meta(|meta| {
                 if meta.path.is_ident("prefix") {
                     meta.input.parse::<Token![=]>()?;
                     let prefix: syn::Ident = meta.input.parse()?;
@@ -46,40 +51,27 @@ pub(crate) fn container(
                     return Ok(());
                 }
 
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    attr.attributes.owned = Some(content.parse()?);
-                    return Ok(());
-                }
-
                 Err(syn::Error::new(
                     meta.path.span(),
-                    format_args!("#[{OWNED}]: Unsupported attribute"),
+                    format_args!("#[{BORROWME}]: Unsupported attribute"),
                 ))
-            });
+            })
+        } else if a.path().is_ident(BORROWED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                attr.attributes.borrow.push(input.parse()?);
+                Ok(())
+            })
+        } else if a.path().is_ident(OWNED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                attr.attributes.own.push(input.parse()?);
+                Ok(())
+            })
+        } else {
+            continue;
+        };
 
-            if let Err(error) = result {
-                cx.error(error);
-            }
-        } else if a.path().is_ident(BORROWED) {
-            let result = a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    attr.attributes.borrowed = Some(content.parse()?);
-                    return Ok(());
-                }
-
-                Err(syn::Error::new(
-                    meta.path.span(),
-                    format_args!("#[{BORROWED}]: Unsupported attribute"),
-                ))
-            });
-
-            if let Err(error) = result {
-                cx.error(error);
-            }
+        if let Err(error) = result {
+            cx.error(error);
         }
     }
 
@@ -97,42 +89,29 @@ pub(crate) fn variant(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Variant, ()
     };
 
     for a in attrs {
-        if a.path().is_ident(OWNED) {
-            let result = a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    variant.attributes.owned = Some(content.parse()?);
-                    return Ok(());
-                }
-
+        let result = if a.path().is_ident(BORROWME) {
+            a.parse_nested_meta(|meta| {
                 Err(syn::Error::new(
                     meta.path.span(),
-                    format_args!("#[{OWNED}]: Unsupported attribute"),
+                    format_args!("#[{BORROWME}]: Unsupported attribute"),
                 ))
-            });
+            })
+        } else if a.path().is_ident(BORROWED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                variant.attributes.borrow.push(input.parse()?);
+                Ok(())
+            })
+        } else if a.path().is_ident(OWNED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                variant.attributes.own.push(input.parse()?);
+                Ok(())
+            })
+        } else {
+            continue;
+        };
 
-            if let Err(error) = result {
-                cx.error(error);
-            }
-        } else if a.path().is_ident(BORROWED) {
-            let result = a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    variant.attributes.borrowed = Some(content.parse()?);
-                    return Ok(());
-                }
-
-                Err(syn::Error::new(
-                    meta.path.span(),
-                    format_args!("#[{BORROWED}]: Unsupported attribute"),
-                ))
-            });
-
-            if let Err(error) = result {
-                cx.error(error);
-            }
+        if let Err(error) = result {
+            cx.error(error);
         }
     }
 
@@ -168,9 +147,24 @@ pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
     };
 
     for a in attrs {
-        if a.path().is_ident(OWNED) {
-            let result = a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("ty") {
+        let result = if a.path().is_ident(COPY) {
+            if matches!(&a.meta, syn::Meta::Path(..)) {
+                field.ty = FieldType::Copy;
+                Ok(())
+            } else {
+                Err(syn::Error::new(
+                    a.span(),
+                    format_args!("#[{COPY}] Expected no arguments"),
+                ))
+            }
+        } else if a.path().is_ident(OWNED) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                field.ty = FieldType::Type(input.parse()?);
+                Ok(())
+            })
+        } else if a.path().is_ident(BORROWME) {
+            a.parse_nested_meta(|meta| {
+                if meta.path.is_ident("owned") {
                     meta.input.parse::<Token![=]>()?;
                     field.ty = FieldType::Type(meta.input.parse()?);
                     return Ok(());
@@ -206,45 +200,27 @@ pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
                     return Ok(());
                 }
 
-                if meta.path.is_ident("copy") {
-                    field.ty = FieldType::Copy;
-                    return Ok(());
-                }
-
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    field.attributes.owned = Some(content.parse()?);
-                    return Ok(());
-                }
-
                 Err(syn::Error::new(
                     meta.path.span(),
-                    format_args!("#[{OWNED}]: Unsupported attribute"),
+                    format_args!("#[{BORROWME}]: Unsupported attribute"),
                 ))
-            });
+            })
+        } else if a.path().is_ident(BORROWED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                field.attributes.borrow.push(input.parse()?);
+                Ok(())
+            })
+        } else if a.path().is_ident(OWNED_ATTR) {
+            a.parse_args_with(|input: ParseStream<'_>| {
+                field.attributes.own.push(input.parse()?);
+                Ok(())
+            })
+        } else {
+            continue;
+        };
 
-            if let Err(error) = result {
-                cx.error(error);
-            }
-        } else if a.path().is_ident(BORROWED) {
-            let result = a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("attr") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    field.attributes.borrowed = Some(content.parse()?);
-                    return Ok(());
-                }
-
-                Err(syn::Error::new(
-                    meta.path.span(),
-                    format_args!("#[{BORROWED}]: Unsupported attribute"),
-                ))
-            });
-
-            if let Err(error) = result {
-                cx.error(error);
-            }
+        if let Err(error) = result {
+            cx.error(error);
         }
     }
 
@@ -267,6 +243,6 @@ fn parse_path(meta: &ParseNestedMeta) -> syn::Result<(syn::Path, proc_macro2::Sp
 
 pub(crate) fn strip<const N: usize>(attrs: [&mut Vec<syn::Attribute>; N]) {
     for attrs in attrs {
-        attrs.retain(|a| !a.path().is_ident(OWNED) && !a.path().is_ident(BORROWED));
+        attrs.retain(|a| STRIP.iter().all(|name| !a.path().is_ident(name)));
     }
 }
