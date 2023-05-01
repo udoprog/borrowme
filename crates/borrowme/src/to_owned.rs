@@ -3,7 +3,7 @@ use core::hash::Hash;
 #[cfg(feature = "std")]
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 
-/// Convert a type to owned.
+/// Convert to owned.
 ///
 /// This works similarly to [`ToOwned`][std::borrow::ToOwned] with a few relaxed
 /// constaints. It is recommended that you use [`to_owned`][crate::to_owned()]
@@ -13,15 +13,15 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 ///
 /// # What about `std::borrow::ToOwned`?
 ///
-/// [`ToOwned`][`std::borrow::ToOwned`] is a symmetric trait, which explicitly
-/// requires that the resulting `Owned` associated type can be borrowed back
-/// into a reference of itself (See [`Borrow<Self>`][crate::Borrow] in this
-/// crate for more details). So because we can't implement
-/// [`Borrow<Self>`][std::borrow::Borrow], we can't implemented
-/// [`ToOwned`][std::borrow::ToOwned] either.
+/// [`std::borrow::ToOwned`] a trait which requires that the resulting `Owned`
+/// type can be borrowed back into a reference of itself. This can't be
+/// implemented for compound borrowing (See
+/// [`borrowme::Borrow`][crate::Borrow]). So because we can't implement
+/// [`std::borrow::Borrow<Self>`], we can't implemented [`std::borrow::ToOwned`]
+/// either.
 ///
-/// Let's say we want to implement [`ToOwned`][std::borrow::ToOwned] for a type
-/// which has a lifetime:
+/// To showcase this, let's try to implement [`std::borrow::ToOwned`] for a type
+/// which has a lifetime parameter:
 ///
 /// ```compile_fail
 /// struct Word<'a>(&'a str);
@@ -66,7 +66,7 @@ pub trait ToOwned {
     /// The owned type this is being converted to.
     type Owned;
 
-    /// Perform a covnersion from a reference to owned data.
+    /// Perform a covnersion from a reference to owned value.
     fn to_owned(&self) -> Self::Owned;
 }
 
