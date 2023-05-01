@@ -347,8 +347,9 @@
 /// * [`#[borrowme(to_owned_with = <path>)]`][to_owned_with],
 ///   [`#[borrowme(borrow_with = <path>)]`][borrow_with], and [`#[borrowme(with
 ///   = <path>)]`][with] which are used for customizing behavior.
-/// * [`#[copy]`][copy] which is used to indicate that the field is `Copy` and
-///   does not require conversion.
+/// * [`#[copy]` and `#[no_copy]`][copy] which is used to indicate if a field is
+///   `Copy` and does not require conversion.
+/// * [`#[std]`][std] which indicates that the field supports std-like operations.
 /// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
 ///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
 ///   attributes.
@@ -362,7 +363,8 @@
 /// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
 /// [borrow_with]: #borrowmeborrow_with--path-field-attribute
 /// [with]: #borrowmewith--path-field-attribute
-/// [copy]: #copy-field-attribute
+/// [copy]: #copy-and-no_copy-field-attribute
+/// [std]: #std-field-attribute
 /// [borrowed_attr]: #borrowed_attrmeta-field-attribute
 /// [owned_attr]: #owned_attrmeta-field-attribute
 ///
@@ -402,9 +404,9 @@
 /// #### `#[borrowme(to_owned_with = <path>)]` field attribute
 ///
 /// Specifies a path to use when making a field owned. By default this is:
-/// * `::core::clone::Clone::clone` if `#[owned(<type>)]` is not specified.
-/// * `::borrowme::ToOwned::to_owned` if `#[owned(<type>)]` is specified.
+/// * [`Clone`] if `#[borrowme(std)]` is specified.
 /// * An owned `self.<field>` expression if `#[copy]` is specified.
+/// * `::borrowme::ToOwned::to_owned`.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -426,9 +428,9 @@
 /// #### `#[borrowme(borrow_with = <path>)]` field attribute
 ///
 /// Specifies a path to use when making a field owned. By default this is:
-/// * A borrowed `&self.<field>` if `#[owned(<type>)]` is not specified.
-/// * `::borrowme::Borrowed::borrow` if `#[owned(<type>)]` is specified.
+/// * A borrowed `&self.<field>` if `#[borrowme(std)]` is specified.
 /// * An owned `self.<field>` expression if `#[copy]` is specified.
+/// * `::borrowme::Borrowed::borrow`.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -497,19 +499,58 @@
 ///
 /// <br>
 ///
-/// #### `#[copy]` field attribute
+/// #### `#[copy]` and `#[no_copy]` field attribute
 ///
 /// Indicates that the field type is `Copy`, if this is set then the value is
 /// not cloned when the type is converted to and from its *owned* variant.
 ///
+/// By default the macro performs heuristic to determine if a field is `Copy` or
+/// not. This means that prelude types which make up common copy configurations
+/// will be treated as copy. If this happens inadvertently the `#[no_copy]` or
+/// `#[std]` attributes can be used.
+///
+/// Type which are `#[copy]` by default are:
+/// * `u8`, `u16`, `u32`, `u64`, `u128`, and `usize`.
+/// * `i8`, `i16`, `i32`, `i64`, `i128`, and `isize`.
+/// * `f32` and `f64`.
+/// * `bool`.
+/// * Tuple types `(A, B, ..)` for which all of its elements look like they are
+///   copy.
+/// * Array types `[T; N]` for which the element `T` looks like they are copy.
+///
 /// ```
 /// # use borrowme::borrowme;
+/// # #[allow(non_camel_case_types)]
+/// #[derive(Clone)]
+/// struct bool;
+///
 /// #[borrowme]
 /// pub struct Word<'a> {
-///     #[owned(String)]
-///     text: &'a str,
-///     #[copy]
-///     teineigo: bool,
+///     #[borrowme(std)]
+///     teineigo: &'a bool,
+/// }
+/// ```
+///
+/// <br>
+///
+/// #### `#[std]` field attribute
+///
+/// Causes conversion to happen by using [`Clone`] to convert into an owned type
+/// and a reference expression like `&self.<field>` to borrow.
+///
+/// The type behind the reference will be used as the owned target unless
+/// `#[borrowme(owned = <type>)]` is specified.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// # #[allow(non_camel_case_types)]
+/// #[derive(Clone)]
+/// struct WordKind;
+///
+/// #[borrowme]
+/// pub struct Word<'a> {
+///     #[borrowme(std)]
+///     kind: &'a WordKind,
 /// }
 /// ```
 ///

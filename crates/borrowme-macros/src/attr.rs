@@ -8,12 +8,13 @@ use crate::ctxt::Ctxt;
 use crate::respan::Respan;
 
 pub(crate) const COPY: &str = "copy";
+pub(crate) const NO_COPY: &str = "no_copy";
 pub(crate) const BORROWME: &str = "borrowme";
 pub(crate) const BORROWED_ATTR: &str = "borrowed_attr";
 pub(crate) const OWNED_ATTR: &str = "owned_attr";
 pub(crate) const OWNED: &str = "owned";
 
-const STRIP: [&str; 5] = [COPY, BORROWED_ATTR, OWNED_ATTR, BORROWME, OWNED];
+const STRIP: [&str; 6] = [COPY, NO_COPY, BORROWED_ATTR, OWNED_ATTR, BORROWME, OWNED];
 
 #[derive(Default)]
 pub(crate) struct Attributes {
@@ -120,15 +121,21 @@ pub(crate) fn variant(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Variant, ()
     Ok(variant)
 }
 
-#[derive(Default)]
-pub(crate) enum FieldType {
+#[derive(Default, Debug, Clone, Copy)]
+pub(crate) enum FieldTypeKind {
     // Clone the original field.
     #[default]
-    Original,
-    // Copy the original field.
-    Copy,
-    // Replace with type.
-    Type(Respan<syn::Type>),
+    Default,
+    // Explicit indication if the field is copy.
+    Copy(bool),
+    // Explicitly std traits to handle the field.
+    Std,
+}
+
+#[derive(Default)]
+pub(crate) struct FieldType {
+    pub(crate) kind: FieldTypeKind,
+    pub(crate) owned: Option<Respan<syn::Type>>
 }
 
 pub(crate) struct Field {
@@ -155,7 +162,7 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
     for a in attrs {
         let result = if a.path().is_ident(COPY) {
             if matches!(&a.meta, syn::Meta::Path(..)) {
-                field.ty = FieldType::Copy;
+                field.ty.kind = FieldTypeKind::Copy(true);
                 Ok(())
             } else {
                 Err(syn::Error::new(
@@ -163,16 +170,41 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
                     format_args!("#[{COPY}] Expected no arguments"),
                 ))
             }
+        } else if a.path().is_ident(NO_COPY) {
+            if matches!(&a.meta, syn::Meta::Path(..)) {
+                field.ty.kind = FieldTypeKind::Copy(false);
+                Ok(())
+            } else {
+                Err(syn::Error::new(
+                    a.span(),
+                    format_args!("#[{NO_COPY}] Expected no arguments"),
+                ))
+            }
         } else if a.path().is_ident(OWNED) {
             a.parse_args_with(|input: ParseStream<'_>| {
-                field.ty = FieldType::Type(Respan::new(input.parse()?, spans));
+                field.ty.owned = Some(Respan::new(input.parse()?, spans));
                 Ok(())
             })
         } else if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
-                if meta.path.is_ident("owned") {
+                if meta.path.is_ident(OWNED) {
                     meta.input.parse::<Token![=]>()?;
-                    field.ty = FieldType::Type(Respan::new(meta.input.parse()?, spans));
+                    field.ty.owned = Some(Respan::new(meta.input.parse()?, spans));
+                    return Ok(());
+                }
+
+                if meta.path.is_ident(COPY) {
+                    field.ty.kind = FieldTypeKind::Copy(true);
+                    return Ok(());
+                }
+
+                if meta.path.is_ident(NO_COPY) {
+                    field.ty.kind = FieldTypeKind::Copy(false);
+                    return Ok(());
+                }
+
+                if meta.path.is_ident("std") {
+                    field.ty.kind = FieldTypeKind::Std;
                     return Ok(());
                 }
 

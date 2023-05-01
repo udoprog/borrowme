@@ -132,7 +132,7 @@ impl BoundAccess<'_> {
 #[derive(Clone, Copy)]
 enum Call<'a> {
     Path(&'a syn::Path),
-    Copy,
+    Ref,
 }
 
 impl Call<'_> {
@@ -153,7 +153,7 @@ impl Call<'_> {
                 call.args.push(access.as_expr());
                 syn::Expr::Call(call)
             }
-            Call::Copy => access.as_expr(),
+            Call::Ref => access.as_expr(),
         }
     }
 }
@@ -371,8 +371,8 @@ fn process_fields(
     access: Access,
     o_fields: &mut syn::Fields,
     b_fields: &mut syn::Fields,
-    to_owned_entries: &mut Vec<TokenStream>,
-    borrow_entries: &mut Vec<TokenStream>,
+    to_owned_entries: &mut Vec<syn::FieldValue>,
+    borrow_entries: &mut Vec<syn::FieldValue>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
         let field_ty_spans = field_ty_spans(o_field);
@@ -381,19 +381,18 @@ fn process_fields(
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
 
-        // Try to automatically figure out the owned type.
-        if matches!(attr.ty, attr::FieldType::Original | attr::FieldType::Copy) {
-            // Ensure that the field does not make use of any lifetimes.
-            let ignore = HashSet::new();
-            let mut lifetimes = Vec::new();
-            let mut as_ty = o_field.ty.clone();
+        // Ensure that the field does not make use of any lifetimes.
+        let ignore = HashSet::new();
+        let mut lifetimes = Vec::new();
+        let mut as_ty = o_field.ty.clone();
 
-            let type_hint = process_type(&mut as_ty, &ignore, &mut lifetimes);
+        let (type_hint, reference_type) = process_type(&mut as_ty, &ignore, &mut lifetimes);
 
-            // Provide diagnostics in case there are field lifetimes we can't
-            // make anything out of. Such as a `&'a str` field marked with
-            // `#[copy]`.
-            if matches!(attr.ty, attr::FieldType::Copy) {
+        // Provide diagnostics in case there are field lifetimes we can't
+        // make anything out of. Such as a `&'a str` field marked with
+        // `#[copy]`.
+        match attr.ty.kind {
+            attr::FieldTypeKind::Copy(true) => {
                 for (span, lt) in lifetimes {
                     let mut error = if lt.is_some() {
                         syn::Error::new(span, format_args!("{NAME}: lifetime not supported."))
@@ -410,12 +409,16 @@ fn process_fields(
                     ));
                     cx.error(error);
                 }
-            } else {
+            }
+            _ => {
+                let is_std_ref = matches!(attr.ty.kind, attr::FieldTypeKind::Std if reference_type.is_some());
+
                 // For non-copy types, build an expression that tries to use the
                 // `ToOwned` implementation to figure out which type to use.
                 match type_hint {
-                    TypeHint::None => {
+                    TypeHint::None if attr.ty.owned.is_none() && !is_std_ref => {
                         let mut path = cx.borrowme_to_owned_t.clone();
+
                         path.segments.push(syn::PathSegment::from(syn::Ident::new(
                             "Owned",
                             Span::call_site(),
@@ -432,24 +435,36 @@ fn process_fields(
                             path,
                         });
 
-                        attr.ty = attr::FieldType::Type(Respan::new(ty, field_ty_spans));
+                        attr.ty.owned = Some(Respan::new(ty, field_ty_spans));
                     }
                     TypeHint::Copy => {
-                        attr.ty = attr::FieldType::Copy;
+                        if !matches!(attr.ty.kind, attr::FieldTypeKind::Copy(false)) {
+                            attr.ty.kind = attr::FieldTypeKind::Copy(true);
+                        }
+                    }
+                    _ => {
                     }
                 }
             }
-        }
+        };
 
-        let (to_owned, borrow) = match &attr.ty {
-            attr::FieldType::Copy => (Call::Copy, Call::Copy),
-            attr::FieldType::Original => {
-                let clone = &cx.clone_t_clone;
-                (Call::Path(clone), Call::Path(clone))
+        let (to_owned, borrow) = match (attr.ty.kind, reference_type, attr.ty.owned) {
+            (attr::FieldTypeKind::Copy(true), _, _) => (Call::Ref, Call::Ref),
+            (attr::FieldTypeKind::Std, _, Some(ty)) => {
+                o_field.ty = ty.into_type();
+                (Call::Path(&cx.clone_t_clone), Call::Ref)
             }
-            attr::FieldType::Type(ty) => {
+            (attr::FieldTypeKind::Std, Some(ty), None) => {
+                o_field.ty = ty;
+                (Call::Path(&cx.clone_t_clone), Call::Ref)
+            }
+            (_, _, Some(ty)) => {
                 o_field.ty = ty.into_type();
                 (Call::Path(&attr.to_owned), Call::Path(&attr.borrow))
+            }
+            _ => {
+                let clone = &cx.clone_t_clone;
+                (Call::Path(clone), Call::Path(clone))
             }
         };
 
@@ -458,18 +473,27 @@ fn process_fields(
             None => Binding::Unnamed(syn::Index::from(index)),
         };
 
+        let member = binding.as_member();
+
         let bound = BoundAccess {
-            copy: matches!(attr.ty, attr::FieldType::Copy),
+            copy: matches!(attr.ty.kind, attr::FieldTypeKind::Copy(true)),
             access,
             binding: &binding,
         };
 
-        let member = binding.as_member();
+        to_owned_entries.push(syn::FieldValue {
+            attrs: Vec::new(),
+            member: member.clone(),
+            colon_token: Some(<Token![:]>::default()),
+            expr: to_owned.as_expr(&bound),
+        });
 
-        let to_owned = to_owned.as_expr(&bound);
-        to_owned_entries.push(quote!(#member: #to_owned));
-        let borrow = borrow.as_expr(&bound);
-        borrow_entries.push(quote!(#member: #borrow));
+        borrow_entries.push(syn::FieldValue {
+            attrs: Vec::new(),
+            member,
+            colon_token: Some(<Token![:]>::default()),
+            expr: borrow.as_expr(&bound),
+        });
     }
 
     Ok(())
@@ -516,7 +540,7 @@ fn apply_attributes(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum TypeHint {
     /// No particular type hint.
     None,
@@ -540,9 +564,12 @@ fn process_type<'ty>(
     ty: &mut syn::Type,
     ignore: &HashSet<syn::Ident>,
     out: &mut Vec<(Span, Option<syn::Lifetime>)>,
-) -> TypeHint {
+) -> (TypeHint, Option<syn::Type>) {
     match ty {
-        syn::Type::Array(ty) => process_type(&mut ty.elem, ignore, out),
+        syn::Type::Array(ty) => {
+            let (hint, _) = process_type(&mut ty.elem, ignore, out);
+            (hint, None)
+        }
         syn::Type::BareFn(ty) => {
             let mut ignore = ignore.clone();
 
@@ -560,13 +587,13 @@ fn process_type<'ty>(
             }
 
             // NB: bare function are copy.
-            TypeHint::Copy
+            (TypeHint::Copy, None)
         }
         syn::Type::Group(ty) => process_type(&mut ty.elem, ignore, out),
         syn::Type::Reference(ty) => {
             if let Some(lt) = &ty.lifetime {
                 if ignore.contains(&lt.ident) || lt.ident == STATIC {
-                    return TypeHint::Copy;
+                    return (TypeHint::Copy, None);
                 }
             }
 
@@ -583,24 +610,38 @@ fn process_type<'ty>(
                 span,
                 ty.lifetime.replace(syn::Lifetime::new(STATIC_LT, span)),
             ));
-            TypeHint::None
+            (TypeHint::None, Some((*ty.elem).clone()))
         }
         syn::Type::Slice(ty) => {
             process_type(&mut ty.elem, ignore, out);
             // Slice types such as [T] are not copy, and they do in fact
             // indicate that the container is unsized.
-            TypeHint::None
+            (TypeHint::None, None)
         }
         syn::Type::Tuple(ty) => {
             let mut hint = TypeHint::Copy;
 
             for ty in &mut ty.elems {
-                hint.combine(process_type(ty, ignore, out));
+                hint.combine(process_type(ty, ignore, out).0);
             }
 
-            hint
+            (hint, None)
         }
         syn::Type::Path(ty) => {
+            if let Some(ident) = &ty.path.get_ident() {
+                let ident = ident.to_string();
+
+                // NB: Primitive-looking types. This can fail at which point the
+                // user is required to specify `#[no_copy]`.
+                match ident.as_str() {
+                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return (TypeHint::Copy, None),
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return (TypeHint::Copy, None),
+                    "f32" | "f64" => return (TypeHint::Copy, None),
+                    "bool" => return (TypeHint::Copy, None),
+                    _ => {}
+                }
+            }
+
             for s in &mut ty.path.segments {
                 match &mut s.arguments {
                     syn::PathArguments::AngleBracketed(generics) => {
@@ -619,9 +660,9 @@ fn process_type<'ty>(
             // argument, we can't make any assumptions about if they are `Copy`
             // or not. Even though types such as `Option<&'static str>` are
             // `Copy`.
-            TypeHint::None
+            (TypeHint::None, None)
         }
-        _ => TypeHint::None,
+        _ => (TypeHint::None, None),
     }
 }
 
