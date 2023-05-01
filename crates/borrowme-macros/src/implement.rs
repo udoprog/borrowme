@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use proc_macro2::{Span, TokenStream};
-use quote::{quote_spanned, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
 use syn::{token, Token};
 
@@ -163,8 +163,7 @@ pub(crate) fn implement(
 
             let owned_ident = &o_st.ident;
 
-            let to_owned_fn = quote_spanned! {
-                b_st.span() =>
+            let to_owned_fn = quote! {
                 #[inline]
                 fn to_owned(&self) -> Self::Owned {
                     #owned_ident {
@@ -175,8 +174,8 @@ pub(crate) fn implement(
 
             let borrow_ident = &b_st.ident;
 
-            let borrow_fn = quote_spanned! {
-                o_st.span() =>
+            let borrow_fn = quote! {
+                #[inline]
                 fn borrow(&self) -> Self::Target<'_> {
                     #borrow_ident {
                         #(#borrow_entries,)*
@@ -201,7 +200,7 @@ pub(crate) fn implement(
             let borrow_ident = b_en.ident.clone();
 
             for (o_variant, b_variant) in o_en.variants.iter_mut().zip(b_en.variants.iter_mut()) {
-                let attr = attr::variant(cx, &mut o_variant.attrs)?;
+                let attr = attr::variant(cx, &o_variant.attrs)?;
                 attr::strip([&mut o_variant.attrs, &mut b_variant.attrs]);
 
                 apply_attributes(&attr.attributes, &mut o_variant.attrs, &mut b_variant.attrs);
@@ -231,8 +230,7 @@ pub(crate) fn implement(
                 let variant_ident = &o_variant.ident;
                 let patterns = fields.clone().map(|b| b.as_field_value());
 
-                to_owned_variants.push(quote_spanned! {
-                    o_variant.span() =>
+                to_owned_variants.push(quote! {
                     #borrow_ident::#variant_ident { #(#patterns,)* } => {
                         #owned_ident::#variant_ident {
                             #(#to_owned_entries,)*
@@ -242,8 +240,7 @@ pub(crate) fn implement(
 
                 let patterns = fields.clone().map(|b| b.as_field_value());
 
-                borrow_variants.push(quote_spanned! {
-                    o_variant.span() =>
+                borrow_variants.push(quote! {
                     #owned_ident::#variant_ident { #(#patterns,)* } => {
                         #borrow_ident::#variant_ident {
                             #(#borrow_entries,)*
@@ -252,8 +249,7 @@ pub(crate) fn implement(
                 });
             }
 
-            let to_owned_fn = quote_spanned! {
-                b_en.span() =>
+            let to_owned_fn = quote! {
                 #[inline]
                 fn to_owned(&self) -> Self::Owned {
                     match self {
@@ -262,8 +258,8 @@ pub(crate) fn implement(
                 }
             };
 
-            let borrow_fn = quote_spanned! {
-                o_en.span() =>
+            let borrow_fn = quote! {
+                #[inline]
                 fn borrow(&self) -> Self::Target<'_> {
                     match self {
                         #(#borrow_variants,)*
@@ -302,8 +298,7 @@ pub(crate) fn implement(
         let (impl_generics, type_generics, where_generics) = borrow_generics.split_for_impl();
         let to_owned = &cx.owned_to_owned;
 
-        quote_spanned! {
-            item.span() =>
+        quote! {
             #[automatically_derived]
             impl #impl_generics #to_owned for #borrow_ident #type_generics #where_generics {
                 type Owned = #owned_ident #to_owned_type_generics;
@@ -330,8 +325,7 @@ pub(crate) fn implement(
         let (impl_generics, type_generics, where_generics) = owned_generics.split_for_impl();
         let owned_borrow = &cx.owned_borrow;
 
-        quote_spanned! {
-            item.span() =>
+        quote! {
             #[automatically_derived]
             impl #impl_generics #owned_borrow for #owned_ident #type_generics #where_generics {
                 type Target<#this_lt> = #borrow_ident #borrow_return_type_generics;
@@ -357,7 +351,7 @@ fn process_fields(
     borrow_entries: &mut Vec<TokenStream>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
-        let attr = attr::field(cx, &mut o_field.attrs);
+        let attr = attr::field(cx, &o_field.attrs);
         let attr = attr?;
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
@@ -387,7 +381,7 @@ fn process_fields(
 
         let bound = BoundAccess {
             copy: matches!(attr.ty, attr::FieldType::Copy),
-            access: &access,
+            access,
             binding: &binding,
         };
 

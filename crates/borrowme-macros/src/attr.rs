@@ -197,7 +197,7 @@ pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
                         arguments: syn::PathArguments::None,
                     });
 
-                    field.borrow = path.clone();
+                    field.borrow = path;
                     field.borrow.segments.push(syn::PathSegment {
                         ident: syn::Ident::new("borrow", span),
                         arguments: syn::PathArguments::None,

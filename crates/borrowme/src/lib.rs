@@ -24,21 +24,19 @@
 //! let lang = Some(String::from("eng"));
 //!
 //! let word = Word {
-//!     text: "hello",
+//!     text: "Hello World",
 //!     lang: lang.as_deref(),
 //! };
 //!
-//! let owned_word: OwnedWord = borrowme::to_owned(&word);
-//! assert_eq!(&owned_word.text, word.text);
-//! assert_eq!(owned_word.lang.as_deref(), word.lang);
+//! let word2: OwnedWord = borrowme::to_owned(&word);
+//! assert_eq!(word2.text.as_str(), word.text);
+//! assert_eq!(word2.lang.as_deref(), word.lang);
 //!
-//! let word2: Word<'_> = borrowme::borrow(&owned_word);
-//! assert_eq!(word2, word);
+//! let word3: Word<'_> = borrowme::borrow(&word2);
+//! assert_eq!(word3, word);
 //! ```
 //!
 //! <br>
-//!
-//! ## Why can't we use [`std::borrow::ToOwned`][std-to-owned] and [`std::borrow::Borrow`][std-borrow]?
 //!
 //! Rust comes with two sibling traits which both are responsible for converting
 //! something to an owned and a borrowed variant: [`ToOwned`][std-to-owned] and
@@ -48,140 +46,14 @@
 //! about it from a broader perspective: How to we convert a type which *has
 //! lifetimes*, to one which *does not*?
 //!
-//! ```
-//! struct Word<'a> {
-//!     text: &'a str,
-//!     lang: Option<&'a str>,
-//! }
-//! ```
+//! To this end this crate defines two similar traits: [`ToOwned`] and
+//! [`Borrow`]. These traits serve a similar purpose to the traits in `std` but
+//! are implemented differently. See their corresponding documentation for more
+//! details.
 //!
-//! Let's try to implement `ToOwned` for this type.
-//!
-//! ```compile_fail
-//! # struct Word<'a> { text: &'a str, lang: Option<&'a str> }
-//! struct OwnedWord {
-//!     text: String,
-//!     lang: Option<String>,
-//! }
-//!
-//! impl ToOwned for Word<'_> {
-//!     type Owned = OwnedWord;
-//!
-//!     #[inline]
-//!     fn to_owned(&self) -> OwnedWord {
-//!         OwnedWord {
-//!             text: self.text.to_owned(),
-//!             lang: self.lang.map(ToOwned::to_owned),
-//!         }
-//!     }
-//! }
-//! ```
-//!
-//! ```text
-//! error[E0277]: the trait bound `OwnedWord: std::borrow::Borrow<Word<'_>>` is not satisfied
-//!   --> src/lib.rs:27:18
-//!    |
-//! 11 |     type Owned = OwnedWord;
-//!    |                  ^^^^^^^^^ the trait `std::borrow::Borrow<Word<'_>>` is not implemented for `OwnedWord`
-//!    |
-//! note: required by a bound in `std::borrow::ToOwned::Owned`
-//!   --> alloc/src/borrow.rs:41:17
-//!    |
-//! 41 |     type Owned: Borrow<Self>;
-//!    |                 ^^^^^^^^^^^^ required by this bound in `ToOwned::Owned`
-//! ```
-//!
-//! This happens because [`ToOwned`][std-to-owned] is a symmetric trait, which
-//! requires that the resulting `Owned` type can be borrowed back into the type
-//! being converted.
-//!
-//! So the first task is to define a new [`ToOwned`] trait which does not
-//! require the produced value to be [`Borrow`][std-borrow].
-//!
-//! Simple enough, but what if we need to go *the other* way?
-//!
-//! The [`Borrow`][std-borrow] trait as defined faces an issue which can't be
-//! easily addressed. The `borrow` method returns *a reference* to the borrowed
-//! type.
-//!
-//! ```
-//! pub trait Borrow<Borrowed: ?Sized> {
-//!     fn borrow(&self) -> &Borrowed;
-//! }
-//! ```
-//!
-//! This means that there is no way to implement `Borrow<Word<'a>>` because it
-//! required that we return a reference which doesn't outlive `'a`, something
-//! that can't be satisfied because we don't hold a reference to `Word<'a>`.
-//!
-//! ```compile_fail
-//! # use std::borrow::Borrow;
-//! # struct Word<'a> { text: &'a str, lang: Option<&'a str> }
-//! # struct OwnedWord { text: String, lang: Option<String> }
-//! impl<'a> Borrow<Word<'a>> for OwnedWord {
-//!     fn borrow(&self) -> &Word<'a> {
-//!         &Word {
-//!            text: self.text.as_str(),
-//!            lang: self.lang.as_ref().map(String::as_str),
-//!         }
-//!     }
-//! }
-//! ```
-//!
-//! ```text
-//! error: lifetime may not live long enough
-//!   --> src/lib.rs:83:9
-//!    |
-//! 6  |   impl<'a> Borrow<Word<'a>> for OwnedWord {
-//!    |        -- lifetime `'a` defined here
-//! 7  |       fn borrow(&self) -> &Word<'a> {
-//!    |                 - let's call the lifetime of this reference `'1`
-//! 8  | /         &Word {
-//! 9  | |            text: self.text.as_str(),
-//! 10 | |            lang: self.lang.as_ref().map(String::as_str),
-//! 11 | |         }
-//!    | |_________^ associated function was supposed to return data with lifetime `'a` but it is returning data with lifetime `'1`
-//! ```
-//!
-//! The solution this crate provides is to define a new [`Borrow`] trait which
-//! makes use of [generic associated types]. This allows it to structurally
-//! decompose a borrowed value.
-//!
-//! ```rust
-//! pub trait Borrow {
-//!     type Target<'a>
-//!     where
-//!         Self: 'a;
-//!
-//!     fn borrow(&self) -> Self::Target<'_>;
-//! }
-//! ```
-//!
-//! Now we can implement it for `OwnedWord`:
-//!
-//! ```
-//! # use borrowme::Borrow;
-//! # struct Word<'a> { text: &'a str, lang: Option<&'a str> }
-//! # struct OwnedWord { text: String, lang: Option<String> }
-//! impl Borrow for OwnedWord {
-//!     type Target<'a> = Word<'a>;
-//!
-//!     fn borrow(&self) -> Self::Target<'_> {
-//!         Word {
-//!            text: self.text.as_str(),
-//!            lang: self.lang.as_ref().map(String::as_str),
-//!         }
-//!     }
-//! }
-//! ```
-//!
-//! The catch here is that `Borrow` can only be implemented once for each time,
-//! compared to [`Borrow<T>`][std-borrow]. But for our purposes this is fine.
-//! This crate is primarily intended to work with two symmetrical types.
-//!
-//! [`ToOwned`]: https://docs.rs/borrowme
+//! [`ToOwned`]: https://docs.rs/borrowme/latest/borrowme/trait.ToOwned.html
 //! [generic associated types]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
-//! [borrowme]: https://docs.rs/borrowme
+//! [borrowme]: https://docs.rs/borrowme/latest/borrowme/attr.borrowme.html
 //! [std-borrow]: std::borrow::Borrow
 //! [std-to-owned]: std::borrow::ToOwned
 
