@@ -1,0 +1,11 @@
+error: #[borrowme]: lifetime not supported.
+ --> tests/ui/lifetime_hint.rs:7:9
+  |
+7 |     b: &'b str,
+  |         ^^
+
+error: Hint: add #[owned(ty = <type>)] to specify which type to override this field with
+ --> tests/ui/lifetime_hint.rs:7:5
+  |
+7 |     b: &'b str,
+  |     ^

@@ -1,0 +1,21 @@
+[package]
+name = "borrowme"
+version = "0.0.0"
+authors = ["John-John Tedro <udoprog@tedro.se>"]
+edition = "2018"
+rust-version = "1.65"
+description = "The missing compositional borrowing for Rust."
+documentation = "https://docs.rs/borrowme"
+readme = "README.md"
+homepage = "https://github.com/udoprog/borrowme"
+repository = "https://github.com/udoprog/borrowme"
+license = "MIT/Apache-2.0"
+keywords = ["code-generation", "template"]
+categories = ["template-engine"]
+
+[dependencies]
+borrowme-macros = { path = "../borrowme-macros", version = "=0.0.0" }
+
+[dev-dependencies]
+serde = { version = "1.0.160", features = ["derive"] }
+trybuild = "1.0.80"
