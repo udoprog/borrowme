@@ -14,7 +14,7 @@ impl<T> Respan<T> {
 
 impl Respan<syn::Type> {
     // Make use of the verbatim type to generate a respanned token stream.
-    pub(crate) fn into_type(&self) -> syn::Type {
+    pub(crate) fn into_type(self) -> syn::Type {
         let stream = self.inner.to_token_stream();
         syn::Type::Verbatim(crate::respan::respan(stream, self.spans))
     }

@@ -562,7 +562,7 @@ impl TypeHint {
 
 /// Capture all lifetimes from a type, and return a type which has all lifetimes
 /// sanitized so it can be used in a `<<$ty> as ToOwned>::Owned` expression.
-fn process_type<'ty>(
+fn process_type(
     ty: &mut syn::Type,
     ignore: &HashSet<syn::Ident>,
     out: &mut Vec<(Span, Option<syn::Lifetime>)>,
@@ -672,7 +672,7 @@ fn process_type<'ty>(
     }
 }
 
-fn process_generic_type<'ty, P>(
+fn process_generic_type<P>(
     generics: &mut Punctuated<syn::GenericArgument, P>,
     ignore: &HashSet<syn::Ident>,
     out: &mut Vec<(Span, Option<syn::Lifetime>)>,
