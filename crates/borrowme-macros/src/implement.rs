@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{quote, ToTokens};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{token, Token};
 
@@ -10,35 +11,41 @@ use crate::ctxt::Ctxt;
 
 const NAME: &str = "#[borrowme]";
 
+#[derive(Debug, Clone, Copy)]
 enum Access {
-    SelfAccess {
-        and_token: Token![&],
-        self_token: Token![self],
-        dot_token: Token![.],
-    },
+    SelfAccess,
     BindingAccess,
 }
 
 enum Binding {
-    Field(syn::Ident),
-    Index(syn::Index),
+    Named(syn::Ident),
+    Unnamed(syn::Index),
 }
 
 impl Binding {
+    fn as_member(&self) -> syn::Member {
+        match self {
+            Binding::Named(ident) => syn::Member::Named(ident.clone()),
+            Binding::Unnamed(index) => syn::Member::Unnamed(index.clone()),
+        }
+    }
+
     /// Construct binding as a varaible name.
     fn as_variable(&self) -> syn::Ident {
         match self {
-            Binding::Field(ident) => ident.clone(),
-            Binding::Index(index) => syn::Ident::new(&format!("f{}", index.index), index.span()),
+            Binding::Named(ident) => ident.clone(),
+            Binding::Unnamed(index) => syn::Ident::new(&format!("f{}", index.index), index.span()),
         }
     }
 
     /// Construct `field: value` syntax.
     fn as_field_value(&self) -> syn::FieldValue {
+        let member = self.as_member();
+
         match self {
-            Binding::Field(ident) => syn::FieldValue {
+            Binding::Named(ident) => syn::FieldValue {
                 attrs: Vec::new(),
-                member: syn::Member::Named(ident.clone()),
+                member,
                 colon_token: None,
                 expr: syn::Expr::Path(syn::ExprPath {
                     attrs: Vec::new(),
@@ -46,12 +53,12 @@ impl Binding {
                     path: ident.clone().into(),
                 }),
             },
-            Binding::Index(index) => {
+            Binding::Unnamed(index) => {
                 let ident = syn::Ident::new(&format!("f{}", index.index), index.span());
 
                 syn::FieldValue {
                     attrs: Vec::new(),
-                    member: syn::Member::Unnamed(index.clone()),
+                    member,
                     colon_token: Some(<Token![:]>::default()),
                     expr: syn::Expr::Path(syn::ExprPath {
                         attrs: Vec::new(),
@@ -67,10 +74,10 @@ impl Binding {
 impl ToTokens for Binding {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            Binding::Field(field) => {
+            Binding::Named(field) => {
                 field.to_tokens(tokens);
             }
-            Binding::Index(index) => {
+            Binding::Unnamed(index) => {
                 index.to_tokens(tokens);
             }
         }
@@ -79,43 +86,70 @@ impl ToTokens for Binding {
 
 struct BoundAccess<'a> {
     copy: bool,
-    access: &'a Access,
+    access: Access,
     binding: &'a Binding,
 }
 
-impl ToTokens for BoundAccess<'_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl BoundAccess<'_> {
+    fn as_expr(&self) -> syn::Expr {
         match &self.access {
-            Access::SelfAccess {
-                and_token,
-                self_token,
-                dot_token,
-            } => {
-                if !self.copy {
-                    and_token.to_tokens(tokens);
+            Access::SelfAccess => {
+                let expr = syn::Expr::Field(syn::ExprField {
+                    attrs: Vec::new(),
+                    base: Box::new(syn::Expr::Path(syn::ExprPath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: syn::Path::from(<Token![self]>::default()),
+                    })),
+                    dot_token: <Token![.]>::default(),
+                    member: self.binding.as_member(),
+                });
+
+                if self.copy {
+                    return expr;
                 }
 
-                self_token.to_tokens(tokens);
-                dot_token.to_tokens(tokens);
-                self.binding.to_tokens(tokens);
+                syn::Expr::Reference(syn::ExprReference {
+                    attrs: Vec::new(),
+                    and_token: <Token![&]>::default(),
+                    mutability: None,
+                    expr: Box::new(expr),
+                })
             }
-            Access::BindingAccess => {
-                self.binding.as_variable().to_tokens(tokens);
-            }
+            Access::BindingAccess => syn::Expr::Path(syn::ExprPath {
+                attrs: Vec::new(),
+                qself: None,
+                path: syn::Path::from(self.binding.as_variable()),
+            }),
         }
     }
 }
 
+#[derive(Clone, Copy)]
 enum Call<'a> {
     Path(&'a syn::Path),
     Copy,
 }
 
 impl Call<'_> {
-    fn as_tokens(&self, span: Span, access: &BoundAccess<'_>) -> TokenStream {
+    fn as_expr(self, access: &BoundAccess<'_>) -> syn::Expr {
         match self {
-            Call::Path(path) => quote_spanned!(span => #path(#access)),
-            Call::Copy => quote_spanned!(span => #access),
+            Call::Path(path) => {
+                let mut call = syn::ExprCall {
+                    attrs: Vec::new(),
+                    func: Box::new(syn::Expr::Path(syn::ExprPath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: path.clone(),
+                    })),
+                    paren_token: token::Paren::default(),
+                    args: Punctuated::new(),
+                };
+
+                call.args.push(access.as_expr());
+                syn::Expr::Call(call)
+            }
+            Call::Copy => access.as_expr(),
         }
     }
 }
@@ -146,15 +180,9 @@ pub(crate) fn implement(
             let mut to_owned_entries = Vec::new();
             let mut borrow_entries = Vec::new();
 
-            let access = Access::SelfAccess {
-                and_token: <Token![&]>::default(),
-                self_token: <Token![self]>::default(),
-                dot_token: <Token![.]>::default(),
-            };
-
             process_fields(
                 cx,
-                &access,
+                Access::SelfAccess,
                 &mut o_st.fields,
                 &mut b_st.fields,
                 &mut to_owned_entries,
@@ -208,10 +236,9 @@ pub(crate) fn implement(
                 let mut to_owned_entries = Vec::new();
                 let mut borrow_entries = Vec::new();
 
-                let access = Access::BindingAccess;
                 process_fields(
                     cx,
-                    &access,
+                    Access::BindingAccess,
                     &mut o_variant.fields,
                     &mut b_variant.fields,
                     &mut to_owned_entries,
@@ -223,8 +250,8 @@ pub(crate) fn implement(
                     .iter()
                     .enumerate()
                     .map(|(n, f)| match &f.ident {
-                        Some(ident) => Binding::Field(ident.clone()),
-                        None => Binding::Index(syn::Index::from(n)),
+                        Some(ident) => Binding::Named(ident.clone()),
+                        None => Binding::Unnamed(syn::Index::from(n)),
                     });
 
                 let variant_ident = &o_variant.ident;
@@ -344,11 +371,11 @@ pub(crate) fn implement(
 
 fn process_fields(
     cx: &Ctxt,
-    access: &Access,
+    access: Access,
     fields: &mut syn::Fields,
     b_fields: &mut syn::Fields,
-    to_owned_entries: &mut Vec<TokenStream>,
-    borrow_entries: &mut Vec<TokenStream>,
+    to_owned_entries: &mut Vec<syn::FieldValue>,
+    borrow_entries: &mut Vec<syn::FieldValue>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
         let attr = attr::field(cx, &o_field.attrs);
@@ -375,8 +402,8 @@ fn process_fields(
         };
 
         let binding = match &o_field.ident {
-            Some(ident) => Binding::Field(ident.clone()),
-            None => Binding::Index(syn::Index::from(index)),
+            Some(ident) => Binding::Named(ident.clone()),
+            None => Binding::Unnamed(syn::Index::from(index)),
         };
 
         let bound = BoundAccess {
@@ -385,10 +412,19 @@ fn process_fields(
             binding: &binding,
         };
 
-        let f = to_owned.as_tokens(o_field.span(), &bound);
-        to_owned_entries.push(quote_spanned!(o_field.span() => #binding: #f));
-        let f = borrow.as_tokens(o_field.span(), &bound);
-        borrow_entries.push(quote_spanned!(o_field.span() => #binding: #f));
+        to_owned_entries.push(syn::FieldValue {
+            attrs: Vec::new(),
+            member: binding.as_member(),
+            colon_token: Some(<Token![:]>::default()),
+            expr: to_owned.as_expr(&bound),
+        });
+
+        borrow_entries.push(syn::FieldValue {
+            attrs: Vec::new(),
+            member: binding.as_member(),
+            colon_token: Some(<Token![:]>::default()),
+            expr: borrow.as_expr(&bound),
+        });
     }
 
     Ok(())
