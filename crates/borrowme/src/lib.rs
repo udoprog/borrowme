@@ -4,35 +4,64 @@
 //!
 //! The missing compositional borrowing for Rust.
 //!
-//! This crate provides an attribute macro which helps you achieve compositional
-//! borrowing. Roughly this means that you can convert a struct which has
-//! lifetimes into ones which does not and vice versa.
+//! This crate provides an attribute macro which helps you pair two types
+//! through compositional borrowing and ownership conversion. Roughly this means
+//! that you can convert a struct which has lifetimes into ones which does not
+//! and such as between the `Word` and `OwnedWord` structs here:
+//!
+//! ```
+//! #[derive(Debug, PartialEq, Eq)]
+//! struct Word<'a> {
+//!     text: &'a str,
+//!     lang: Option<&'a str>,
+//!     examples: Vec<&'a str>,
+//! }
+//!
+//! #[derive(Debug, PartialEq, Eq)]
+//! struct OwnedWord {
+//!     text: String,
+//!     lang: Option<String>,
+//!     examples: Vec<String>,
+//! }
+//! ```
+//!
+//! Writing and maintaining the `OwnedWord` variant is labour intensive and
+//! error prone. Instead we can use the [`#[borrowme]`][borrowme] attribute
+//! provided by this crate:
+//!
+//! ```
+//! use borrowme::borrowme;
+//!
+//! #[borrowme]
+//! #[derive(Debug, PartialEq, Eq)]
+//! struct Word<'a> {
+//!     #[owned]
+//!     text: &'a str,
+//!     #[owned(Option<String>)]
+//!     lang: Option<&'a str>,
+//!     #[owned(Vec<String>)]
+//!     examples: Vec<&'a str>,
+//! }
+//! ```
 //!
 //! See the [`#[borrowme]`][borrowme] attribute for detailed documentation on
 //! how the attribute works.
 //!
 //! ```
-//! #[borrowme::borrowme]
-//! #[derive(Debug, PartialEq, Eq)]
-//! struct Word<'a> {
-//!     #[owned(String)]
-//!     text: &'a str,
-//!     #[owned(Option<String>)]
-//!     lang: Option<&'a str>,
-//! }
-//!
-//! let text = String::from("Hello World");
+//! # #[borrowme::borrowme] #[derive(Debug, PartialEq, Eq)] struct Word<'a> {
+//! # #[owned(String)] text: &'a str, #[owned(Option<String>)] lang: Option<&'a str>, #[owned(Vec<String>)] examples: Vec<&'a str>,
+//! # }
+//! let text = String::from("Hello");
 //! let lang = Some(String::from("eng"));
+//! let examples = vec![String::from("Hello World")];
 //!
 //! let word = Word {
 //!     text: "Hello World",
 //!     lang: lang.as_deref(),
+//!     examples: examples.iter().map(|s| s.as_str()).collect(),
 //! };
 //!
 //! let word2: OwnedWord = borrowme::to_owned(&word);
-//! assert_eq!(word2.text.as_str(), word.text);
-//! assert_eq!(word2.lang.as_deref(), word.lang);
-//!
 //! let word3: Word<'_> = borrowme::borrow(&word2);
 //! assert_eq!(word3, word);
 //! ```
@@ -58,7 +87,7 @@
 //! [std-borrow]: std::borrow::Borrow
 //! [std-to-owned]: std::borrow::ToOwned
 
-/// Automatically build an owned variant of a type and implement [`ToOwned`] and
+/// Automatically build an *owned* variant of a type and implement [`ToOwned`] and
 /// [`Borrow`].
 ///
 /// Anything captured by the macro will be forwarded to the generated variant.
@@ -112,7 +141,8 @@
 ///
 /// ## Container attributes
 ///
-/// The following section documents all the supported container attributes:
+/// The following section documents supported container attributes:
+///
 /// * [`#[borrowme(prefix = <ident>)]`][prefix] which is used to change the prefix of the
 ///   generated *owned* variant.
 /// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
@@ -174,7 +204,7 @@
 ///
 /// #### `#[borrowed_attr(<meta>)]` container attribute
 ///
-/// Apply the given `<meta>` to a container attribute, but only for the
+/// Apply the given `<meta>` as a container attribute, but only for the
 /// *borrowed* variant.
 ///
 /// ```
@@ -198,8 +228,8 @@
 ///
 /// #### `#[owned_attr(<meta>)]` container attribute
 ///
-/// Apply the given given `<meta>` to a container, but only to the owned
-/// variant.
+/// Apply the given given `<meta>` as a container attribute, but only to the
+/// *owned* variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -222,7 +252,8 @@
 ///
 /// ## Variant attributes
 ///
-/// The following section documents all the available variant attributes:
+/// The following section documents supported variant attributes:
+///
 /// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
 ///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
 ///   attributes.
@@ -236,7 +267,7 @@
 ///
 /// #### `#[borrowed_attr(<meta>)]` variant attribute
 ///
-/// Apply the given `<meta>` to a variant attribute, but only for the *borrowed*
+/// Apply the given `<meta>` as a variant attribute, but only for the *borrowed*
 /// variant.
 ///
 /// ```
@@ -257,7 +288,7 @@
 ///
 /// #### `#[owned_attr(<meta>)]` variant attribute
 ///
-/// Apply the given `<meta>` to a variant attribute, but only for the *owned*
+/// Apply the given `<meta>` as a variant attribute, but only for the *owned*
 /// variant.
 ///
 /// ```
@@ -278,7 +309,8 @@
 ///
 /// ## Field attributes
 ///
-/// The following section documents all the available field attributes:
+/// The following section documents supported field attributes:
+///
 /// * [`#[owned(<type>)]` or `#[selectme(owned = <type>)]`][owned] which is a
 ///   required attribute for specifying the owned type a field is being
 ///   converted into.
@@ -422,7 +454,7 @@
 /// #### `#[copy]` field attribute
 ///
 /// Indicates that the field type is `Copy`, if this is set then the value is
-/// not cloned when the type is converted to and from its owned variant.
+/// not cloned when the type is converted to and from its *owned* variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -439,7 +471,7 @@
 ///
 /// #### `#[borrowed_attr(<meta>)]` field attribute
 ///
-/// Apply the given `<meta>` to a field attribute, but only for the *borrowed*
+/// Apply the given `<meta>` as a field attribute, but only for the *borrowed*
 /// variant. This allows certain attributes that are only needed for the
 /// borrowed variant to be implemented, such as `#[serde(borrow)]`.
 ///
@@ -460,11 +492,10 @@
 ///
 /// #### `#[owned_attr(<meta>)]` field attribute
 ///
-/// Apply the given `<meta>` to a field attribute, but only for the *owned*
-/// variant. This allows certain attributes that are only needed for the owned
-/// variant to be implemented.
+/// Apply the given `<meta>` as a field attribute, but only for the *owned*
+/// variant.
 ///
-/// In the below example, only the owned variant will have a serde
+/// In the below example, only the *owned* variant will have a serde
 /// implementation:
 ///
 /// ```
@@ -488,7 +519,7 @@ pub use self::borrow::Borrow;
 mod to_owned;
 pub use self::to_owned::ToOwned;
 
-/// Convert the value into an owned variant.
+/// Convert the value into an *owned* variant.
 ///
 /// This helper function is provided so that you don't have to have the
 /// [`ToOwned`] trait in scope, and make it explicit when this crate is being
