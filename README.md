@@ -11,16 +11,16 @@ This crate provides an attribute macro which helps you achieve compositional
 borrowing. Roughly this means that you can convert a struct which has
 lifetimes into ones which does not and vice versa.
 
-> **Note:** See the [`#[borrowme]`][borrowme] attribute for more
-> documentation.
+See the [`#[borrowme]`][borrowme] attribute for detailed documentation on
+how the attribute works.
 
 ```rust
 #[borrowme::borrowme]
 #[derive(Debug, PartialEq, Eq)]
 struct Word<'a> {
-    #[owned(ty = String)]
+    #[owned(String)]
     text: &'a str,
-    #[owned(ty = Option<String>)]
+    #[owned(Option<String>)]
     lang: Option<&'a str>,
 }
 

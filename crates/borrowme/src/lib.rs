@@ -8,8 +8,8 @@
 //! borrowing. Roughly this means that you can convert a struct which has
 //! lifetimes into ones which does not and vice versa.
 //!
-//! > **Note:** See the [`#[borrowme]`][borrowme] attribute for more
-//! > documentation.
+//! See the [`#[borrowme]`][borrowme] attribute for detailed documentation on
+//! how the attribute works.
 //!
 //! ```
 //! #[borrowme::borrowme]
@@ -58,11 +58,15 @@
 //! [std-borrow]: std::borrow::Borrow
 //! [std-to-owned]: std::borrow::ToOwned
 
-/// Automatically implement owned variants of borrowed structs and implement
-/// [`ToOwned`] and [`Borrow`].
+/// Automatically build an owned variant of a type and implement [`ToOwned`] and
+/// [`Borrow`].
+///
+/// Anything captured by the macro will be forwarded to the generated variant.
+/// To have detailed control over this behavior, see the `#[owned_attr(<meta>)]`
+/// and `#[owned_attr(<meta>)]` attributes below.
 ///
 /// In order to work as intended, `#[borrowme]` must be used *before* any
-/// attributes that you want it to capture, such as derives.
+/// attributes that you want it to capture such as derives.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -103,6 +107,8 @@
 /// 15 | implements_serialize::<OwnedWord>();
 ///    |                        ^^^^^^^^^ the trait `Serialize` is not implemented for `OwnedWord`
 /// ```
+///
+/// <br>
 ///
 /// ## Container attributes
 ///
@@ -157,7 +163,8 @@
 ///
 /// #### `#[borrowed_attr(<meta>)]`
 ///
-/// Only apply the given `<meta>` to the borrowed variant.
+/// Apply the given `<meta>` to a container attribute, but only for the
+/// *borrowed* variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -180,7 +187,8 @@
 ///
 /// #### `#[owned_attr(<meta>)]`
 ///
-/// Apply the given given `<meta>`, but only to the owned variant.
+/// Apply the given given `<meta>` to a container, but only to the owned
+/// variant.
 ///
 /// ```
 /// # use borrowme::borrowme;
@@ -197,6 +205,54 @@
 ///
 /// let word2 = word.clone();
 /// assert_eq!(word.text, word2.text);
+/// ```
+///
+/// <br>
+///
+/// ## Variant attributes
+///
+/// Variant attributes are attributes which apply to enum variants.
+///
+/// <br>
+///
+/// #### `#[borrowed_attr(<meta>)]`
+///
+/// Apply the given `<meta>` to a variant attribute, but only for the *borrowed*
+/// variant.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// #[borrowed_attr(derive(Default))]
+/// enum Word<'a> {
+///     Wiktionary(#[owned(String)] &'a str),
+///     #[borrowed_attr(default)]
+///     Unknown,
+/// }
+///
+/// let word = Word::default();
+/// assert!(matches!(word, Word::Unknown));
+/// ```
+///
+/// <br>
+///
+/// #### `#[owned_attr(<meta>)]`
+///
+/// Apply the given `<meta>` to a variant attribute, but only for the *owned*
+/// variant.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// #[owned_attr(derive(Default))]
+/// enum Word<'a> {
+///     Wiktionary(#[owned(String)] &'a str),
+///     #[owned_attr(default)]
+///     Unknown,
+/// }
+///
+/// let word = OwnedWord::default();
+/// assert!(matches!(word, OwnedWord::Unknown));
 /// ```
 ///
 /// <br>
@@ -223,7 +279,9 @@
 /// }
 /// ```
 ///
-/// #### `#[owned(to_owned_with = <path>)]`
+/// <br>
+///
+/// #### `#[borrowme(to_owned_with = <path>)]`
 ///
 /// Specifies a path to use when making a field owned. By default this is:
 /// * `::core::clone::Clone::clone` if `#[owned(<type>)]` is not specified.
@@ -247,7 +305,7 @@
 ///
 /// <br>
 ///
-/// #### `#[owned(borrow_with = <path>)]`
+/// #### `#[borrowme(borrow_with = <path>)]`
 ///
 /// Specifies a path to use when making a field owned. By default this is:
 /// * A borrowed `&self.<field>` if `#[owned(<type>)]` is not specified.
@@ -272,7 +330,9 @@
 /// }
 /// ```
 ///
-/// #### `#[owned(with = <path>)]`
+/// <br>
+///
+/// #### `#[borrowme(with = <path>)]`
 ///
 /// Specifies a path to use when calling `to_owned` and `borrow` on a field.
 ///
@@ -339,7 +399,7 @@
 ///
 /// #### `#[borrowed_attr(<meta>)]`
 ///
-/// Apply the given attribute `<meta>` to a field, but only for the *borrowed*
+/// Apply the given `<meta>` to a field attribute, but only for the *borrowed*
 /// variant. This allows certain attributes that are only needed for the
 /// borrowed variant to be implemented, such as `#[serde(borrow)]`.
 ///
@@ -356,11 +416,29 @@
 /// }
 /// ```
 ///
+/// <br>
+///
 /// #### `#[owned_attr(<meta>)]`
 ///
-/// Apply the given attribute `<meta>` to a field, but only for the *owned*
-/// variant. This allows certain attributes that are only needed for the
-/// owned variant to be implemented.
+/// Apply the given `<meta>` to a field attribute, but only for the *owned*
+/// variant. This allows certain attributes that are only needed for the owned
+/// variant to be implemented.
+///
+/// In the below example, only the owned variant will have a serde
+/// implementation:
+///
+/// ```
+/// # use borrowme::borrowme;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[borrowme]
+/// #[owned_attr(derive(Serialize, Deserialize))]
+/// struct Word<'a> {
+///     #[owned(Option<String>)]
+///     #[owned_attr(serde(default, skip_serializing_if = "Option::is_none"))]
+///     lang: Option<&'a str>,
+/// }
+/// ```
 #[doc(inline)]
 pub use borrowme_macros::borrowme;
 
