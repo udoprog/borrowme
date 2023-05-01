@@ -1,39 +1,35 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-/// Convert a type to owned data.
+/// Convert a type to owned.
 ///
 /// This works similarly to [`ToOwned`][std::borrow::ToOwned] with a few relaxed
-/// constaints.
+/// constaints. It is recommended that you use [`to_owned`][crate::to_owned()]
+/// instead of importing this trait.
 ///
-/// It is recommended that you use [`to_owned`][crate::to_owned()] instead of
-/// importing this trait.
+/// <br>
 ///
-/// # Why can't we use `std::borrow::ToOwned`?
+/// # What about `std::borrow::ToOwned`?
+///
+/// [`ToOwned`][`std::borrow::ToOwned`] is a symmetric trait, which explicitly
+/// requires that the resulting `Owned` associated type can be borrowed back
+/// into a reference of itself (See [`Borrow<Self>`][crate::Borrow] in this
+/// crate for more details). So because we can't implement
+/// [`Borrow<Self>`][std::borrow::Borrow], we can't implemented
+/// [`ToOwned`][std::borrow::ToOwned] either.
 ///
 /// Let's say we want to implement [`ToOwned`][std::borrow::ToOwned] for a type
 /// which has a lifetime:
 ///
 /// ```compile_fail
-/// struct Word<'a> {
-///     text: &'a str,
-///     lang: Option<&'a str>,
-/// }
-///
-/// struct OwnedWord {
-///     text: String,
-///     lang: Option<String>,
-/// }
+/// struct Word<'a>(&'a str);
+/// struct OwnedWord(String);
 ///
 /// impl ToOwned for Word<'_> {
 ///     type Owned = OwnedWord;
 ///
-///     #[inline]
 ///     fn to_owned(&self) -> OwnedWord {
-///         OwnedWord {
-///             text: self.text.to_owned(),
-///             lang: self.lang.map(ToOwned::to_owned),
-///         }
+///         OwnedWord(self.0.to_owned())
 ///     }
 /// }
 /// ```
@@ -44,37 +40,23 @@ use std::hash::Hash;
 ///    |
 /// 11 |     type Owned = OwnedWord;
 ///    |                  ^^^^^^^^^ the trait `std::borrow::Borrow<Word<'_>>` is not implemented for `OwnedWord`
-///    |
-/// note: required by a bound in `std::borrow::ToOwned::Owned`
-///   --> alloc/src/borrow.rs:41:17
-///    |
-/// 41 |     type Owned: Borrow<Self>;
-///    |                 ^^^^^^^^^^^^ required by this bound in `ToOwned::Owned`
 /// ```
 ///
-/// This happens because [`ToOwned`][std-to-owned] is a symmetric trait, which
-/// explicitly requires that the resulting `Owned` type can be borrowed back
-/// into a reference of itself (See [`Borrow`][crate::Borrow] in this crate).
-///
-/// So the first requirement we need is to define a new [`ToOwned`] trait which
-/// does not require the produced value to be [`Borrow`][std::borrow::Borrow].
+/// So in this crate we define a different [`ToOwned`] trait which does not
+/// require the produced value to be [`Borrow<Self>`][std::borrow::Borrow].
 ///
 /// With this, we can implement the conversion:
 ///
 /// ```
-/// # struct Word<'a> { text: &'a str, lang: Option<&'a str> }
-/// # struct OwnedWord { text: String, lang: Option<String> }
+/// # struct Word<'a>(&'a str);
+/// # struct OwnedWord(String);
 /// use borrowme::ToOwned;
 ///
 /// impl ToOwned for Word<'_> {
 ///     type Owned = OwnedWord;
 ///
-///     #[inline]
 ///     fn to_owned(&self) -> OwnedWord {
-///         OwnedWord {
-///             text: std::borrow::ToOwned::to_owned(self.text),
-///             lang: self.lang.map(std::borrow::ToOwned::to_owned),
-///         }
+///         OwnedWord(self.0.to_string())
 ///     }
 /// }
 /// ```

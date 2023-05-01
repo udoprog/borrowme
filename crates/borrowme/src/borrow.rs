@@ -11,7 +11,7 @@ use std::hash::Hash;
 ///
 /// <br>
 ///
-/// # Why can't we use `std::borrow::Borrow`?
+/// # What about `std::borrow::Borrow`?
 ///
 /// The [`Borrow`][std::borrow::Borrow] trait as defined faces an issue which
 /// can't be easily addressed if we want to perform complex borrow from `&self`.
@@ -29,57 +29,40 @@ use std::hash::Hash;
 ///
 /// ```compile_fail
 /// # use std::borrow::Borrow;
-/// struct Word<'a> {
-///     text: &'a str,
-///     lang: Option<&'a str>
-/// }
-///
-/// struct OwnedWord {
-///     text: String,
-///     lang: Option<String>
-/// }
+/// struct Word<'a>(&'a str);
+/// struct OwnedWord(String);
 ///
 /// impl<'a> Borrow<Word<'a>> for OwnedWord {
 ///     fn borrow(&self) -> &Word<'a> {
-///         &Word {
-///            text: self.text.as_str(),
-///            lang: self.lang.as_ref().map(String::as_str),
-///         }
+///         &Word(self.0.as_str())
 ///     }
 /// }
 /// ```
 ///
 /// ```text
-/// error: lifetime may not live long enough
-///   --> src/lib.rs:83:9
-///    |
-/// 6  |   impl<'a> Borrow<Word<'a>> for OwnedWord {
-///    |        -- lifetime `'a` defined here
-/// 7  |       fn borrow(&self) -> &Word<'a> {
-///    |                 - let's call the lifetime of this reference `'1`
-/// 8  | /         &Word {
-/// 9  | |            text: self.text.as_str(),
-/// 10 | |            lang: self.lang.as_ref().map(String::as_str),
-/// 11 | |         }
-///    | |_________^ associated function was supposed to return data with lifetime `'a` but it is returning data with lifetime `'1`
+/// error[E0515]: cannot return reference to temporary value
+///  --> src\borrow.rs:37:9
+///   |
+/// 9 |         &Word(self.0.as_str())
+///   |         ^---------------------
+///   |         ||
+///   |         |temporary value created here
+///   |         returns a reference to data owned by the current function
 /// ```
 ///
 /// The solution implemented in this crate is to use a [generic `Target`], with
 /// this we can implement `borrow` like this:
 ///
 /// ```
-/// # struct Word<'a> { text: &'a str, lang: Option<&'a str> }
-/// # struct OwnedWord { text: String, lang: Option<String> }
+/// # struct Word<'a>(&'a str);
+/// # struct OwnedWord(String);
 /// use borrowme::Borrow;
 ///
 /// impl Borrow for OwnedWord {
 ///     type Target<'a> = Word<'a>;
 ///
 ///     fn borrow(&self) -> Self::Target<'_> {
-///         Word {
-///            text: self.text.as_str(),
-///            lang: self.lang.as_ref().map(String::as_str),
-///         }
+///         Word(self.0.as_str())
 ///     }
 /// }
 /// ```

@@ -10,8 +10,8 @@ readme = "README.md"
 homepage = "https://github.com/udoprog/borrowme"
 repository = "https://github.com/udoprog/borrowme"
 license = "MIT/Apache-2.0"
-keywords = ["macros", "borrow", "lifetime"]
-categories = ["no-std", "development-tools", "rust-patterns"]
+keywords = ["borrow", "lifetime", "macros"]
+categories = ["development-tools", "no-std", "rust-patterns"]
 
 [dependencies]
 borrowme-macros = { path = "../borrowme-macros", version = "=0.0.1" }
