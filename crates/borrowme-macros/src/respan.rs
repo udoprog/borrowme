@@ -30,17 +30,10 @@ where
     }
 }
 
-pub(crate) fn respan(stream: TokenStream, spans: (Span, Span)) -> TokenStream {
-    let mut it = stream.into_iter().peekable();
-
-    let mut out = TokenStream::new();
-
-    while it.peek().is_some() {
-        out.extend(it.next().map(|t| inner(t, spans.0)));
-    }
-
-    out.extend(it.next().map(|t| inner(t, spans.1)));
-    out
+fn respan(stream: TokenStream, spans: (Span, Span)) -> TokenStream {
+    let mut it = stream.into_iter();
+    let first = it.next().map(|t| inner(t, spans.0));
+    first.into_iter().chain(it.map(|t| inner(t, spans.1))).collect()
 }
 
 fn respan_stream(stream: TokenStream, span: Span) -> TokenStream {
