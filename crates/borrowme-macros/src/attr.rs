@@ -135,7 +135,7 @@ pub(crate) enum FieldTypeKind {
 #[derive(Default)]
 pub(crate) struct FieldType {
     pub(crate) kind: FieldTypeKind,
-    pub(crate) owned: Option<Respan<syn::Type>>
+    pub(crate) owned: Option<Respan<syn::Type>>,
 }
 
 pub(crate) struct Field {

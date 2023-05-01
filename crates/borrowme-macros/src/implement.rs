@@ -411,7 +411,8 @@ fn process_fields(
                 }
             }
             _ => {
-                let is_std_ref = matches!(attr.ty.kind, attr::FieldTypeKind::Std if reference_type.is_some());
+                let is_std_ref =
+                    matches!(attr.ty.kind, attr::FieldTypeKind::Std if reference_type.is_some());
 
                 // For non-copy types, build an expression that tries to use the
                 // `ToOwned` implementation to figure out which type to use.
@@ -442,8 +443,7 @@ fn process_fields(
                             attr.ty.kind = attr::FieldTypeKind::Copy(true);
                         }
                     }
-                    _ => {
-                    }
+                    _ => {}
                 }
             }
         };
@@ -634,8 +634,12 @@ fn process_type<'ty>(
                 // NB: Primitive-looking types. This can fail at which point the
                 // user is required to specify `#[no_copy]`.
                 match ident.as_str() {
-                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return (TypeHint::Copy, None),
-                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return (TypeHint::Copy, None),
+                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => {
+                        return (TypeHint::Copy, None)
+                    }
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => {
+                        return (TypeHint::Copy, None)
+                    }
                     "f32" | "f64" => return (TypeHint::Copy, None),
                     "bool" => return (TypeHint::Copy, None),
                     _ => {}
