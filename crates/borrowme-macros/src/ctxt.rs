@@ -5,22 +5,22 @@ use proc_macro2::{Span, TokenStream};
 
 pub(crate) struct Ctxt {
     errors: RefCell<Vec<syn::Error>>,
-    pub(crate) borrow: syn::Path,
-    pub(crate) clone: syn::Path,
-    pub(crate) owned_borrow: syn::Path,
-    pub(crate) owned_to_owned: syn::Path,
-    pub(crate) to_owned: syn::Path,
+    pub(crate) borrowme_borrow_t_borrow: syn::Path,
+    pub(crate) clone_t_clone: syn::Path,
+    pub(crate) borrowme_borrow_t: syn::Path,
+    pub(crate) borrowme_to_owned_t: syn::Path,
+    pub(crate) borrowme_to_owned_t_borrow: syn::Path,
 }
 
 impl Ctxt {
     pub(crate) fn new(span: Span) -> Self {
         Self {
             errors: RefCell::new(Vec::new()),
-            borrow: path(span, ["borrowme", "Borrow", "borrow"]),
-            clone: path(span, ["core", "clone", "Clone", "clone"]),
-            owned_borrow: path(span, ["borrowme", "Borrow"]),
-            owned_to_owned: path(span, ["borrowme", "ToOwned"]),
-            to_owned: path(span, ["borrowme", "ToOwned", "to_owned"]),
+            borrowme_borrow_t_borrow: path(span, ["borrowme", "Borrow", "borrow"]),
+            borrowme_borrow_t: path(span, ["borrowme", "Borrow"]),
+            borrowme_to_owned_t: path(span, ["borrowme", "ToOwned"]),
+            clone_t_clone: path(span, ["core", "clone", "Clone", "clone"]),
+            borrowme_to_owned_t_borrow: path(span, ["borrowme", "ToOwned", "to_owned"]),
         }
     }
 

@@ -141,8 +141,8 @@ pub(crate) struct Field {
 pub(crate) fn field(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Field, ()> {
     let mut field = Field {
         ty: FieldType::default(),
-        borrow: cx.borrow.clone(),
-        to_owned: cx.to_owned.clone(),
+        borrow: cx.borrowme_borrow_t_borrow.clone(),
+        to_owned: cx.borrowme_to_owned_t_borrow.clone(),
         attributes: Attributes::default(),
     };
 

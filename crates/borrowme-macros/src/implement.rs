@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::mem;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
@@ -10,6 +11,8 @@ use crate::attr;
 use crate::ctxt::Ctxt;
 
 const NAME: &str = "#[borrowme]";
+const STATIC: &str = "static";
+const STATIC_LT: &str = "'static";
 
 #[derive(Debug, Clone, Copy)]
 enum Access {
@@ -316,7 +319,7 @@ pub(crate) fn implement(
 
     let to_owned = {
         let (impl_generics, type_generics, where_generics) = borrow_generics.split_for_impl();
-        let to_owned = &cx.owned_to_owned;
+        let to_owned = &cx.borrowme_to_owned_t;
 
         quote! {
             #[automatically_derived]
@@ -343,7 +346,7 @@ pub(crate) fn implement(
         let (_, borrow_return_type_generics, _) = borrow_generics.split_for_impl();
 
         let (impl_generics, type_generics, where_generics) = owned_generics.split_for_impl();
-        let owned_borrow = &cx.owned_borrow;
+        let owned_borrow = &cx.borrowme_borrow_t;
 
         quote! {
             #[automatically_derived]
@@ -365,27 +368,80 @@ pub(crate) fn implement(
 fn process_fields(
     cx: &Ctxt,
     access: Access,
-    fields: &mut syn::Fields,
+    o_fields: &mut syn::Fields,
     b_fields: &mut syn::Fields,
     to_owned_entries: &mut Vec<syn::FieldValue>,
     borrow_entries: &mut Vec<syn::FieldValue>,
 ) -> Result<(), ()> {
-    for (index, (o_field, b_field)) in fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
-        let attr = attr::field(cx, &o_field.attrs);
-        let attr = attr?;
+    for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
+        let mut attr = attr::field(cx, &o_field.attrs)?;
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
 
+        // Try to automatically figure out the owned type.
         if matches!(attr.ty, attr::FieldType::Original | attr::FieldType::Copy) {
             // Ensure that the field does not make use of any lifetimes.
             let ignore = HashSet::new();
-            ensure_no_lifetimes(cx, o_field.span(), &o_field.ty, &ignore);
+            let mut lifetimes = Vec::new();
+            let mut as_ty = o_field.ty.clone();
+
+            let type_hint = process_type(cx, o_field.span(), &mut as_ty, &ignore, &mut lifetimes);
+
+            // Provide diagnostics in case there are field lifetimes we can't
+            // make anything out of. Such as a `&'a str` field marked with
+            // `#[copy]`.
+            if matches!(attr.ty, attr::FieldType::Copy) {
+                for (span, lt) in lifetimes {
+                    let mut error = if lt.is_some() {
+                        syn::Error::new(span, format_args!("{NAME}: lifetime not supported."))
+                    } else {
+                        syn::Error::new(
+                            span,
+                            format_args!("{NAME}: anonymous references not supported."),
+                        )
+                    };
+
+                    error.combine(syn::Error::new(
+                        o_field.span(),
+                        "Hint: add #[owned(ty = <type>)] to specify which type to override this field with",
+                    ));
+                    cx.error(error);
+                }
+            } else {
+                // For non-copy types, build an expression that tries to use the
+                // `ToOwned` implementation to figure out which type to use.
+                match type_hint {
+                    TypeHint::None => {
+                        let mut path = cx.borrowme_to_owned_t.clone();
+                        path.segments.push(syn::PathSegment::from(syn::Ident::new(
+                            "Owned",
+                            Span::call_site(),
+                        )));
+
+                        let ty = syn::Type::Path(syn::TypePath {
+                            qself: Some(syn::QSelf {
+                                lt_token: <Token![<]>::default(),
+                                ty: Box::new(as_ty),
+                                position: 2,
+                                as_token: Some(<Token![as]>::default()),
+                                gt_token: <Token![>]>::default(),
+                            }),
+                            path,
+                        });
+
+                        attr.ty = attr::FieldType::Type(ty);
+                    }
+                    TypeHint::Copy => {
+                        attr.ty = attr::FieldType::Copy;
+                    }
+                }
+            }
         }
 
         let (to_owned, borrow) = match &attr.ty {
             attr::FieldType::Copy => (Call::Copy, Call::Copy),
             attr::FieldType::Original => {
-                let clone = &cx.clone;
+                let clone = &cx.clone_t_clone;
                 (Call::Path(clone), Call::Path(clone))
             }
             attr::FieldType::Type(ty) => {
@@ -448,11 +504,35 @@ fn apply_attributes(
     }
 }
 
-fn ensure_no_lifetimes(cx: &Ctxt, span: Span, ty: &syn::Type, ignore: &HashSet<syn::Ident>) {
+#[derive(Clone, Copy)]
+enum TypeHint {
+    /// No particular type hint.
+    None,
+    /// Type looks like it could be copy, such as `'static T`.
+    Copy,
+}
+
+impl TypeHint {
+    /// Combine this type hint with another.
+    fn combine(&mut self, other: TypeHint) {
+        *self = match (*self, other) {
+            (TypeHint::Copy, TypeHint::Copy) => TypeHint::Copy,
+            (_, other) => other,
+        };
+    }
+}
+
+/// Capture all lifetimes from a type, and return a type which has all lifetimes
+/// sanitized so it can be used in a `<<$ty> as ToOwned>::Owned` expression.
+fn process_type<'ty>(
+    cx: &Ctxt,
+    span: Span,
+    ty: &mut syn::Type,
+    ignore: &HashSet<syn::Ident>,
+    out: &mut Vec<(Span, Option<syn::Lifetime>)>,
+) -> TypeHint {
     match ty {
-        syn::Type::Array(ty) => {
-            ensure_no_lifetimes(cx, span, &ty.elem, ignore);
-        }
+        syn::Type::Array(ty) => process_type(cx, span, &mut ty.elem, ignore, out),
         syn::Type::BareFn(ty) => {
             let mut ignore = ignore.clone();
 
@@ -465,42 +545,104 @@ fn ensure_no_lifetimes(cx: &Ctxt, span: Span, ty: &syn::Type, ignore: &HashSet<s
                 }
             }
 
-            for input in &ty.inputs {
-                ensure_no_lifetimes(cx, span, &input.ty, &ignore);
+            for arg in &mut ty.inputs {
+                process_type(cx, span, &mut arg.ty, &ignore, out);
             }
+
+            // NB: bare function are copy.
+            TypeHint::Copy
         }
-        syn::Type::Group(ty) => {
-            ensure_no_lifetimes(cx, span, &ty.elem, ignore);
-        }
+        syn::Type::Group(ty) => process_type(cx, span, &mut ty.elem, ignore, out),
         syn::Type::Reference(ty) => {
-            let mut error = if let Some(lt) = &ty.lifetime {
-                if ignore.contains(&lt.ident) {
+            if let Some(lt) = &ty.lifetime {
+                if ignore.contains(&lt.ident) || lt.ident == STATIC {
+                    return TypeHint::Copy;
+                }
+            }
+
+            let span = ty
+                .lifetime
+                .as_ref()
+                .map(|lt| lt.span())
+                .unwrap_or_else(|| ty.and_token.span());
+
+            // NB: We replace this with the static lifetime to *aid* type
+            // inference, because the `ToOwned::Owned` variant will be the same
+            // regardless.
+            out.push((
+                span,
+                ty.lifetime.replace(syn::Lifetime::new(STATIC_LT, span)),
+            ));
+            TypeHint::None
+        }
+        syn::Type::Slice(ty) => {
+            process_type(cx, span, &mut ty.elem, ignore, out);
+            // Slice types such as [T] are not copy, and they do in fact
+            // indicate that the container is unsized.
+            TypeHint::None
+        }
+        syn::Type::Tuple(ty) => {
+            let mut hint = TypeHint::Copy;
+
+            for ty in &mut ty.elems {
+                hint.combine(process_type(cx, span, ty, ignore, out));
+            }
+
+            hint
+        }
+        syn::Type::Path(ty) => {
+            for s in &mut ty.path.segments {
+                match &mut s.arguments {
+                    syn::PathArguments::AngleBracketed(generics) => {
+                        process_generic_type(cx, span, &mut generics.args, ignore, out);
+                    }
+                    syn::PathArguments::Parenthesized(generics) => {
+                        for ty in &mut generics.inputs {
+                            process_type(cx, span, ty, ignore, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // NB: Since we can't peek through into the implementation of a path
+            // argument, we can't make any assumptions about if they are `Copy`
+            // or not. Even though types such as `Option<&'static str>` are
+            // `Copy`.
+            TypeHint::None
+        }
+        _ => TypeHint::None,
+    }
+}
+
+fn process_generic_type<'ty, P>(
+    cx: &Ctxt,
+    span: Span,
+    generics: &mut Punctuated<syn::GenericArgument, P>,
+    ignore: &HashSet<syn::Ident>,
+    out: &mut Vec<(Span, Option<syn::Lifetime>)>,
+) {
+    for argument in generics.iter_mut() {
+        match argument {
+            syn::GenericArgument::Lifetime(lt) => {
+                // Don't touch existing static lifetimes.
+                if lt.ident == STATIC {
                     return;
                 }
 
-                syn::Error::new(lt.span(), format_args!("{NAME}: lifetime not supported."))
-            } else {
-                syn::Error::new(
-                    ty.and_token.span(),
-                    format_args!("{NAME}: anonymous references not supported."),
-                )
-            };
-
-            error.combine(syn::Error::new(
-                span,
-                "Hint: add #[owned(ty = <type>)] to specify which type to override this field with",
-            ));
-            cx.error(error);
-        }
-        syn::Type::Slice(ty) => {
-            ensure_no_lifetimes(cx, span, &ty.elem, ignore);
-        }
-        syn::Type::Tuple(ty) => {
-            for ty in &ty.elems {
-                ensure_no_lifetimes(cx, span, ty, ignore);
+                // NB: We replace this with the static lifetime to *aid* type
+                // inference, because the `ToOwned::Owned` variant will be the
+                // same regardless.
+                out.push((
+                    span,
+                    Some(mem::replace(lt, syn::Lifetime::new(STATIC_LT, lt.span()))),
+                ));
             }
+            syn::GenericArgument::Type(ty) => {
+                process_type(cx, span, ty, ignore, out);
+            }
+            _ => {}
         }
-        _ => {}
     }
 }
 

@@ -35,7 +35,7 @@
 //! #[borrowme]
 //! #[derive(Debug, PartialEq, Eq)]
 //! struct Word<'a> {
-//!     #[owned]
+//!     #[owned(String)]
 //!     text: &'a str,
 //!     #[owned(Option<String>)]
 //!     lang: Option<&'a str>,
