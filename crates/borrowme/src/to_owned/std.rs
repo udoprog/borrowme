@@ -15,6 +15,24 @@ impl ToOwned for str {
     }
 }
 
+impl ToOwned for String {
+    type Owned = String;
+
+    #[inline]
+    fn to_owned(&self) -> Self::Owned {
+        String::from(self.as_str())
+    }
+}
+
+impl ToOwned for &mut String {
+    type Owned = String;
+
+    #[inline]
+    fn to_owned(&self) -> Self::Owned {
+        String::from(self.as_str())
+    }
+}
+
 impl<T> ToOwned for Option<T>
 where
     T: ToOwned,

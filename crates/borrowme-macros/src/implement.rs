@@ -90,6 +90,7 @@ impl ToTokens for Binding {
 
 struct BoundAccess<'a> {
     use_reference: bool,
+    is_mut: bool,
     access: Access,
     binding: &'a Binding,
 }
@@ -116,7 +117,7 @@ impl BoundAccess<'_> {
                 syn::Expr::Reference(syn::ExprReference {
                     attrs: Vec::new(),
                     and_token: <Token![&]>::default(),
-                    mutability: None,
+                    mutability: self.is_mut.then(<Token![mut]>::default),
                     expr: Box::new(expr),
                 })
             }
@@ -165,6 +166,8 @@ pub(crate) fn implement(
 ) -> Result<TokenStream, ()> {
     let mut output = item.clone();
 
+    let mut needs_mut = false;
+
     let (to_owned_fn, borrow_fn) = match (&mut output, &mut item) {
         (syn::Item::Struct(o_st), syn::Item::Struct(b_st)) => {
             let attr = attr::container(cx, &o_st.ident, attrs, &o_st.attrs)?;
@@ -189,6 +192,7 @@ pub(crate) fn implement(
                 &mut b_st.fields,
                 &mut to_owned_entries,
                 &mut borrow_entries,
+                &mut needs_mut,
             )?;
 
             let owned_ident = &o_st.ident;
@@ -204,11 +208,22 @@ pub(crate) fn implement(
 
             let borrow_ident = &b_st.ident;
 
-            let borrow_fn = quote! {
-                #[inline]
-                fn borrow(&self) -> Self::Target<'_> {
-                    #borrow_ident {
-                        #(#borrow_entries,)*
+            let borrow_fn = if needs_mut {
+                quote! {
+                    #[inline]
+                    fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
+                        #borrow_ident {
+                            #(#borrow_entries,)*
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    #[inline]
+                    fn borrow(&self) -> Self::Target<'_> {
+                        #borrow_ident {
+                            #(#borrow_entries,)*
+                        }
                     }
                 }
             };
@@ -250,6 +265,7 @@ pub(crate) fn implement(
                     &mut b_variant.fields,
                     &mut to_owned_entries,
                     &mut borrow_entries,
+                    &mut needs_mut,
                 )?;
 
                 let fields = o_variant
@@ -292,11 +308,22 @@ pub(crate) fn implement(
                 }
             };
 
-            let borrow_fn = quote! {
-                #[inline]
-                fn borrow(&self) -> Self::Target<'_> {
-                    match self {
-                        #(#borrow_variants,)*
+            let borrow_fn = if needs_mut {
+                quote! {
+                    #[inline]
+                    fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
+                        match self {
+                            #(#borrow_variants,)*
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    #[inline]
+                    fn borrow(&self) -> Self::Target<'_> {
+                        match self {
+                            #(#borrow_variants,)*
+                        }
                     }
                 }
             };
@@ -357,13 +384,26 @@ pub(crate) fn implement(
         let (_, borrow_return_type_generics, _) = borrow_generics.split_for_impl();
 
         let (impl_generics, type_generics, where_generics) = owned_generics.split_for_impl();
-        let owned_borrow = &cx.borrowme_borrow_t;
 
-        quote! {
-            #[automatically_derived]
-            impl #impl_generics #owned_borrow for #owned_ident #type_generics #where_generics {
-                type Target<#this_lt> = #borrow_ident #borrow_return_type_generics;
-                #borrow_fn
+        if needs_mut {
+            let borrow_mut_t = &cx.borrowme_borrow_mut_t;
+
+            quote! {
+                #[automatically_derived]
+                impl #impl_generics #borrow_mut_t for #owned_ident #type_generics #where_generics {
+                    type TargetMut<#this_lt> = #borrow_ident #borrow_return_type_generics;
+                    #borrow_fn
+                }
+            }
+        } else {
+            let borrow_t = &cx.borrowme_borrow_t;
+
+            quote! {
+                #[automatically_derived]
+                impl #impl_generics #borrow_t for #owned_ident #type_generics #where_generics {
+                    type Target<#this_lt> = #borrow_ident #borrow_return_type_generics;
+                    #borrow_fn
+                }
             }
         }
     };
@@ -383,6 +423,7 @@ fn process_fields(
     b_fields: &mut syn::Fields,
     to_owned_entries: &mut Vec<syn::FieldValue>,
     borrow_entries: &mut Vec<syn::FieldValue>,
+    parent_needs_mut: &mut bool,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
         let field_ty_spans = field_ty_spans(o_field);
@@ -396,14 +437,20 @@ fn process_fields(
         let mut lifetimes = Vec::new();
         let mut as_ty = o_field.ty.clone();
 
-        let (type_hint, reference_type) = process_type(&mut as_ty, &ignore, &mut lifetimes);
+        let (type_hint, immediate_reference) = process_type(&mut as_ty, &ignore, &mut lifetimes);
+
+        let needs_mut = lifetimes
+            .iter()
+            .any(|(_, _, mut_token)| mut_token.is_some());
+        let needs_mut = attr.is_mut || needs_mut;
+        *parent_needs_mut |= needs_mut;
 
         // Provide diagnostics in case there are field lifetimes we can't
         // make anything out of. Such as a `&'a str` field marked with
         // `#[copy]`.
         match attr.ty.kind {
             attr::FieldTypeKind::Copy(true) => {
-                for (span, lt) in lifetimes {
+                for (span, lt, _) in lifetimes {
                     let mut error = if lt.is_some() {
                         syn::Error::new(span, format_args!("{NAME}: lifetime not supported."))
                     } else {
@@ -421,8 +468,7 @@ fn process_fields(
                 }
             }
             _ => {
-                let is_std_ref =
-                    matches!(attr.ty.kind, attr::FieldTypeKind::Std if reference_type.is_some());
+                let is_std_ref = matches!(attr.ty.kind, attr::FieldTypeKind::Std if immediate_reference.is_some());
 
                 // For non-copy types, build an expression that tries to use the
                 // `ToOwned` implementation to figure out which type to use.
@@ -460,7 +506,7 @@ fn process_fields(
             }
         };
 
-        let (to_owned, borrow) = match (attr.ty.kind, &reference_type, attr.ty.owned) {
+        let (to_owned, borrow) = match (attr.ty.kind, &immediate_reference, attr.ty.owned) {
             (attr::FieldTypeKind::Copy(true), _, _) => (Call::Ref, Call::Ref),
             (attr::FieldTypeKind::Std, _, Some(ty)) => {
                 o_field.ty = ty.into_type();
@@ -472,7 +518,14 @@ fn process_fields(
             }
             (_, _, Some(ty)) => {
                 o_field.ty = ty.into_type();
-                (Call::Path(&attr.to_owned), Call::Path(&attr.borrow))
+
+                let borrow = if needs_mut {
+                    &attr.borrow_mut
+                } else {
+                    &attr.borrow
+                };
+
+                (Call::Path(&attr.to_owned), Call::Path(borrow))
             }
             _ => {
                 let clone = &cx.clone_t_clone;
@@ -490,7 +543,8 @@ fn process_fields(
         let is_copy = matches!(attr.ty.kind, attr::FieldTypeKind::Copy(true));
 
         let bound = BoundAccess {
-            use_reference: !is_copy && reference_type.is_none(),
+            use_reference: !is_copy && immediate_reference.is_none(),
+            is_mut: false,
             access,
             binding: &binding,
         };
@@ -504,6 +558,7 @@ fn process_fields(
 
         let bound = BoundAccess {
             use_reference: !is_copy,
+            is_mut: needs_mut,
             access,
             binding: &binding,
         };
@@ -583,7 +638,7 @@ impl TypeHint {
 fn process_type(
     ty: &mut syn::Type,
     ignore: &HashSet<syn::Ident>,
-    out: &mut Vec<(Span, Option<syn::Lifetime>)>,
+    out: &mut Vec<(Span, Option<syn::Lifetime>, Option<Token![mut]>)>,
 ) -> (TypeHint, Option<syn::Type>) {
     match ty {
         syn::Type::Array(ty) => {
@@ -629,6 +684,7 @@ fn process_type(
             out.push((
                 span,
                 ty.lifetime.replace(syn::Lifetime::new(STATIC_LT, span)),
+                ty.mutability.take(),
             ));
             (TypeHint::None, Some((*ty.elem).clone()))
         }
@@ -693,7 +749,7 @@ fn process_type(
 fn process_generic_type<P>(
     generics: &mut Punctuated<syn::GenericArgument, P>,
     ignore: &HashSet<syn::Ident>,
-    out: &mut Vec<(Span, Option<syn::Lifetime>)>,
+    out: &mut Vec<(Span, Option<syn::Lifetime>, Option<Token![mut]>)>,
 ) {
     for argument in generics.iter_mut() {
         match argument {
@@ -709,6 +765,7 @@ fn process_generic_type<P>(
                 out.push((
                     lt.span(),
                     Some(mem::replace(lt, syn::Lifetime::new(STATIC_LT, lt.span()))),
+                    None,
                 ));
             }
             syn::GenericArgument::Type(ty) => {

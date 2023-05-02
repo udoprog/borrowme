@@ -6,8 +6,10 @@ use proc_macro2::{Span, TokenStream};
 pub(crate) struct Ctxt {
     errors: RefCell<Vec<syn::Error>>,
     pub(crate) borrowme_borrow_t_borrow: syn::Path,
+    pub(crate) borrowme_borrow_mut_t_borrow_mut: syn::Path,
     pub(crate) clone_t_clone: syn::Path,
     pub(crate) borrowme_borrow_t: syn::Path,
+    pub(crate) borrowme_borrow_mut_t: syn::Path,
     pub(crate) borrowme_to_owned_t: syn::Path,
     pub(crate) borrowme_to_owned_t_borrow: syn::Path,
 }
@@ -17,7 +19,9 @@ impl Ctxt {
         Self {
             errors: RefCell::new(Vec::new()),
             borrowme_borrow_t_borrow: path(span, ["borrowme", "Borrow", "borrow"]),
+            borrowme_borrow_mut_t_borrow_mut: path(span, ["borrowme", "BorrowMut", "borrow_mut"]),
             borrowme_borrow_t: path(span, ["borrowme", "Borrow"]),
+            borrowme_borrow_mut_t: path(span, ["borrowme", "BorrowMut"]),
             borrowme_to_owned_t: path(span, ["borrowme", "ToOwned"]),
             clone_t_clone: path(span, ["core", "clone", "Clone", "clone"]),
             borrowme_to_owned_t_borrow: path(span, ["borrowme", "ToOwned", "to_owned"]),
