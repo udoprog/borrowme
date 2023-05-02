@@ -75,8 +75,8 @@
 /// [`Borrow`].
 ///
 /// Anything captured by the macro will be forwarded to the generated variant.
-/// To have detailed control over this behavior, see the `#[owned_attr(<meta>)]`
-/// and `#[owned_attr(<meta>)]` attributes below.
+/// To have detailed control over this behavior, see the
+/// `#[borrowed_attr(<meta>)]` and `#[owned_attr(<meta>)]` attributes below.
 ///
 /// In order to work as intended, `#[borrowme]` must be used *before* any
 /// attributes that you want it to capture such as derives.
@@ -129,8 +129,6 @@
 /// overriding the borrow implementation with [`#[borrowme(borrow_with =
 /// <path>)]`][borrow_with].
 ///
-/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
-///
 /// #### `&[T]`
 ///
 /// The `ToOwned` implementation produces a `Vec<T>`, while borrowing that
@@ -177,13 +175,8 @@
 ///
 /// * [`#[borrowme(prefix = <ident>)]`][prefix] which is used to change the prefix of the
 ///   generated *owned* variant.
-/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
-///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
-///   attributes.
-///
-/// [prefix]: #borrowmeprefix--ident-container-attribute
-/// [borrowed_attr]: #borrowed_attrmeta-container-attribute
-/// [owned_attr]: #owned_attrmeta-container-attribute
+/// * [`#[borrowed_attr(<meta>)]`][b-c] and [`#[owned_attr(<meta>)]`][o-c] which
+///   are used to add custom attributes.
 ///
 /// Container attributes are attributes which are added to a container, such as
 /// a `struct` or an `enum`. See for example `#[borrowme(prefix = Prefix)]`
@@ -283,14 +276,10 @@
 ///
 /// The following section documents supported variant attributes:
 ///
-/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
-///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
-///   attributes.
+/// * [`#[borrowed_attr(<meta>)]`][b-v] and [`#[owned_attr(<meta>)]`][o-v] which
+///   are used to add custom attributes.
 ///
 /// Variant attributes are attributes which apply to `enum` variants.
-///
-/// [borrowed_attr]: #borrowed_attrmeta-variant-attribute
-/// [owned_attr]: #owned_attrmeta-variant-attribute
 ///
 /// <br>
 ///
@@ -350,23 +339,13 @@
 ///   `Copy` and does not require conversion.
 /// * [`#[borrowme(std)]`][std] which indicates that the field supports std-like
 ///   operations.
-/// * [`#[borrowed_attr(<meta>)]`][borrowed_attr] and
-///   [`#[owned_attr(<meta>)]`][owned_attr] which are used to add custom
-///   attributes.
+/// * [`#[borrowed_attr(<meta>)]`][b-f] and [`#[owned_attr(<meta>)]`][o-f] which
+///   are used to add custom attributes.
 ///
 /// Field attributes are attributes which apply to fields, such as the fields in
 /// a struct.
 ///
 /// <br>
-///
-/// [owned]: #ownedtype-or-borrowmeowned--type-field-attributes
-/// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
-/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
-/// [with]: #borrowmewith--path-field-attribute
-/// [copy]: #copy-and-no_copy-field-attribute
-/// [std]: #borrowmestd-field-attribute
-/// [borrowed_attr]: #borrowed_attrmeta-field-attribute
-/// [owned_attr]: #owned_attrmeta-field-attribute
 ///
 /// #### `#[owned(<type>)]` or `#[borrowme(owned = <type>)]` field attributes
 ///
@@ -673,6 +652,20 @@
 ///     lang: Option<&'a str>,
 /// }
 /// ```
+///
+/// [prefix]: #borrowmeprefix--ident-container-attribute
+/// [b-c]: #borrowed_attrmeta-container-attribute
+/// [o-c]: #owned_attrmeta-container-attribute
+/// [b-v]: #borrowed_attrmeta-variant-attribute
+/// [o-v]: #owned_attrmeta-variant-attribute
+/// [owned]: #ownedtype-or-borrowmeowned--type-field-attributes
+/// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
+/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
+/// [with]: #borrowmewith--path-field-attribute
+/// [copy]: #copy-and-no_copy-field-attribute
+/// [std]: #borrowmestd-field-attribute
+/// [b-f]: #borrowed_attrmeta-field-attribute
+/// [o-f]: #owned_attrmeta-field-attribute
 #[doc(inline)]
 pub use borrowme_macros::borrowme;
 

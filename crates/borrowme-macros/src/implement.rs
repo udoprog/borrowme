@@ -171,7 +171,12 @@ pub(crate) fn implement(
             attr::strip([&mut o_st.attrs, &mut b_st.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_st.attrs, &mut b_st.attrs);
-            process_generics(cx, o_st.ident.span(), &mut o_st.generics, o_st.fields.is_empty());
+            process_generics(
+                cx,
+                o_st.ident.span(),
+                &mut o_st.generics,
+                o_st.fields.is_empty(),
+            );
             o_st.ident = attr.owned_ident;
 
             let mut to_owned_entries = Vec::new();
@@ -215,7 +220,12 @@ pub(crate) fn implement(
             attr::strip([&mut o_en.attrs, &mut b_en.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_en.attrs, &mut b_en.attrs);
-            process_generics(cx, o_en.ident.span(), &mut o_en.generics, o_en.variants.iter().all(|v| v.fields.is_empty()));
+            process_generics(
+                cx,
+                o_en.ident.span(),
+                &mut o_en.generics,
+                o_en.variants.iter().all(|v| v.fields.is_empty()),
+            );
             o_en.ident = attr.owned_ident;
 
             let mut to_owned_variants = Vec::new();
@@ -723,7 +733,10 @@ fn process_generics(cx: &Ctxt, span: Span, generics: &mut syn::Generics, empty_t
             span
         };
 
-        cx.span_error(span, format_args!("{NAME}: Can only be used on types which receive lifetimes or are empty"));
+        cx.span_error(
+            span,
+            format_args!("{NAME}: Can only be used on types which receive lifetimes or are empty"),
+        );
     }
 
     generics.params = params;
