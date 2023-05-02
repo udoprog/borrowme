@@ -516,7 +516,8 @@
 /// struct OwnedBool(bool);
 ///
 /// #[borrowme]
-/// pub struct Word {
+/// pub struct Word<'a> {
+///     text: &'a str,
 ///     #[copy]
 ///     teineigo: OwnedBool,
 /// }

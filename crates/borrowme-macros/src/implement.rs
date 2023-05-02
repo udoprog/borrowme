@@ -171,7 +171,7 @@ pub(crate) fn implement(
             attr::strip([&mut o_st.attrs, &mut b_st.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_st.attrs, &mut b_st.attrs);
-            strip_lifetimes(&mut o_st.generics);
+            process_generics(cx, o_st.ident.span(), &mut o_st.generics, o_st.fields.is_empty());
             o_st.ident = attr.owned_ident;
 
             let mut to_owned_entries = Vec::new();
@@ -215,7 +215,7 @@ pub(crate) fn implement(
             attr::strip([&mut o_en.attrs, &mut b_en.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_en.attrs, &mut b_en.attrs);
-            strip_lifetimes(&mut o_en.generics);
+            process_generics(cx, o_en.ident.span(), &mut o_en.generics, o_en.variants.iter().all(|v| v.fields.is_empty()));
             o_en.ident = attr.owned_ident;
 
             let mut to_owned_variants = Vec::new();
@@ -702,14 +702,28 @@ fn process_generic_type<P>(
 }
 
 /// Strip lifetime parameters from the given generics.
-fn strip_lifetimes(generics: &mut syn::Generics) {
+fn process_generics(cx: &Ctxt, span: Span, generics: &mut syn::Generics, empty_type: bool) {
+    let mut any = false;
+
     let mut params = generics.params.clone();
     params.clear();
 
     for p in &generics.params {
-        if !matches!(p, syn::GenericParam::Lifetime(..)) {
+        if matches!(p, syn::GenericParam::Lifetime(..)) {
+            any = true;
+        } else {
             params.push(p.clone());
         }
+    }
+
+    if !any && !empty_type {
+        let span = if !generics.params.is_empty() {
+            generics.params.span()
+        } else {
+            span
+        };
+
+        cx.span_error(span, format_args!("{NAME}: Can only be used on types which receive lifetimes or are empty"));
     }
 
     generics.params = params;

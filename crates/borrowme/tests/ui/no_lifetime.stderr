@@ -1,0 +1,11 @@
+error: #[borrowme]: Can only be used on types which receive lifetimes or are empty
+ --> tests/ui/no_lifetime.rs:4:8
+  |
+4 | struct MissingLifetime {
+  |        ^^^^^^^^^^^^^^^
+
+error: #[borrowme]: Can only be used on types which receive lifetimes or are empty
+ --> tests/ui/no_lifetime.rs:9:31
+  |
+9 | struct MissingLifetimeGeneric<A, B, C> {
+  |                               ^
