@@ -47,10 +47,17 @@ pub(crate) fn container(
     for a in attrs.iter().chain(rest) {
         let result = if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
+                // TODO: remove soon:ish
                 if meta.path.is_ident("prefix") {
                     meta.input.parse::<Token![=]>()?;
                     let prefix: syn::Ident = meta.input.parse()?;
                     attr.owned_ident = quote::format_ident!("{prefix}{}", ident);
+                    return Ok(());
+                }
+
+                if meta.path.is_ident("name") {
+                    meta.input.parse::<Token![=]>()?;
+                    attr.owned_ident = meta.input.parse()?;
                     return Ok(());
                 }
 

@@ -189,26 +189,26 @@
 ///
 /// ## Container attributes
 ///
-/// The following section documents supported container attributes:
+/// This section documents supported container attributes:
 ///
-/// * [`#[borrowme(prefix = <ident>)]`][prefix] which is used to change the prefix of the
-///   generated *owned* variant.
+/// * [`#[borrowme(name = <ident>)]`][name] which is used to change the name of
+///   the generated *owned* variant.
 /// * [`#[borrowed_attr(<meta>)]`][b-c] and [`#[owned_attr(<meta>)]`][o-c] which
 ///   are used to add custom attributes.
 ///
 /// Container attributes are attributes which are added to a container, such as
-/// a `struct` or an `enum`. See for example `#[borrowme(prefix = Prefix)]`
+/// a `struct` or an `enum`. See for example `#[borrowme(name = WordBuf)]`
 /// below:
 ///
 /// ```
 /// # use borrowme::borrowme;
-/// #[borrowme(prefix = Prefix)]
-/// struct Struct<'a> {
+/// #[borrowme(name = WordBuf)]
+/// struct Word<'a> {
 /// # text: &'a str,
 ///     /* body */
 /// }
 ///
-/// #[borrowme(prefix = Prefix)]
+/// #[borrowme(name = EnumBuf)]
 /// enum Enum<'a> {
 ///     /* body */
 /// # First { text: &'a str },
@@ -218,14 +218,14 @@
 ///
 /// <br>
 ///
-/// #### `#[borrowme(prefix = <ident>)]` container attribute
+/// #### `#[borrowme(name = <ident>)]` container attribute
 ///
-/// This allows you to pick the prefix to use for the generated type. By default
-/// this is `Owned`.
+/// This allows you to pick the name to use for the generated type. By default
+/// this is the original identifier prefixed with `Owned`.
 ///
 /// ```
 /// # use borrowme::borrowme;
-/// #[borrowme(prefix = Prefix)]
+/// #[borrowme(name = WordBuf)]
 /// #[derive(Debug, PartialEq)]
 /// struct Word<'a> {
 ///     text: &'a str,
@@ -235,7 +235,7 @@
 ///     text: "Hello World",
 /// };
 ///
-/// let word2 = PrefixWord {
+/// let word2 = WordBuf {
 ///     text: String::from("Hello World"),
 /// };
 ///
@@ -292,7 +292,7 @@
 ///
 /// ## Variant attributes
 ///
-/// The following section documents supported variant attributes:
+/// This section documents supported variant attributes:
 ///
 /// * [`#[borrowed_attr(<meta>)]`][b-v] and [`#[owned_attr(<meta>)]`][o-v] which
 ///   are used to add custom attributes.
@@ -345,7 +345,7 @@
 ///
 /// ## Field attributes
 ///
-/// The following section documents supported field attributes:
+/// This section documents supported field attributes:
 ///
 /// * [`#[owned(<type>)]` or `#[borrowme(owned = <type>)]`][owned] which is a
 ///   required attribute for specifying the owned type a field is being
@@ -671,7 +671,7 @@
 /// }
 /// ```
 ///
-/// [prefix]: #borrowmeprefix--ident-container-attribute
+/// [name]: #borrowmename--ident-container-attribute
 /// [b-c]: #borrowed_attrmeta-container-attribute
 /// [o-c]: #owned_attrmeta-container-attribute
 /// [b-v]: #borrowed_attrmeta-variant-attribute
