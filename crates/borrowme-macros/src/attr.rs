@@ -18,17 +18,17 @@ const STRIP: [&str; 6] = [COPY, NO_COPY, BORROWED_ATTR, OWNED_ATTR, BORROWME, OW
 
 #[derive(Default)]
 pub(crate) struct Attributes {
-    // Attributes to only include on the owned variant.
+    /// Attributes to only include on the owned variant.
     pub(crate) own: Vec<syn::Meta>,
-    // Attributes to only include on the borrowed variant.
+    /// Attributes to only include on the borrowed variant.
     pub(crate) borrow: Vec<syn::Meta>,
 }
 
 /// Container attributes.
 pub(crate) struct Container {
-    // The name of the container.
+    /// The name of the container.
     pub(crate) owned_ident: syn::Ident,
-    // Attributes to apply.
+    /// Attributes to apply.
     pub(crate) attributes: Attributes,
 }
 
@@ -130,12 +130,12 @@ pub(crate) fn variant(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Variant, ()
 
 #[derive(Default, Debug, Clone, Copy)]
 pub(crate) enum FieldTypeKind {
-    // Clone the original field.
+    /// Clone the original field.
     #[default]
     Default,
-    // Explicit indication if the field is copy.
+    /// Explicit indication if the field is copy.
     Copy(bool),
-    // Explicitly std traits to handle the field.
+    /// Explicitly std traits to handle the field.
     Std,
 }
 
@@ -146,9 +146,12 @@ pub(crate) struct FieldType {
 }
 
 pub(crate) struct Field {
-    // Replace the type of the field.
+    /// Whether the field needs mut or not.
+    pub(crate) is_mut: bool,
+    /// Replace the type of the field.
     pub(crate) ty: FieldType,
     pub(crate) borrow: syn::Path,
+    pub(crate) borrow_mut: syn::Path,
     pub(crate) to_owned: syn::Path,
     pub(crate) attributes: Attributes,
 }
@@ -159,9 +162,11 @@ pub(crate) struct Field {
 /// respanned to emit better diagnostics in case if fails something like a type
 /// check.
 pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) -> Result<Field, ()> {
-    let mut field = Field {
+    let mut attr = Field {
+        is_mut: false,
         ty: FieldType::default(),
         borrow: cx.borrowme_borrow_t_borrow.clone(),
+        borrow_mut: cx.borrowme_borrow_mut_t_borrow_mut.clone(),
         to_owned: cx.borrowme_to_owned_t_borrow.clone(),
         attributes: Attributes::default(),
     };
@@ -169,7 +174,7 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
     for a in attrs {
         let result = if a.path().is_ident(COPY) {
             if matches!(&a.meta, syn::Meta::Path(..)) {
-                field.ty.kind = FieldTypeKind::Copy(true);
+                attr.ty.kind = FieldTypeKind::Copy(true);
                 Ok(())
             } else {
                 Err(syn::Error::new(
@@ -179,7 +184,7 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
             }
         } else if a.path().is_ident(NO_COPY) {
             if matches!(&a.meta, syn::Meta::Path(..)) {
-                field.ty.kind = FieldTypeKind::Copy(false);
+                attr.ty.kind = FieldTypeKind::Copy(false);
                 Ok(())
             } else {
                 Err(syn::Error::new(
@@ -189,55 +194,60 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
             }
         } else if a.path().is_ident(OWNED) {
             a.parse_args_with(|input: ParseStream<'_>| {
-                field.ty.owned = Some(Respan::new(input.parse()?, spans));
+                attr.ty.owned = Some(Respan::new(input.parse()?, spans));
                 Ok(())
             })
         } else if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
                 if meta.path.is_ident(OWNED) {
                     meta.input.parse::<Token![=]>()?;
-                    field.ty.owned = Some(Respan::new(meta.input.parse()?, spans));
+                    attr.ty.owned = Some(Respan::new(meta.input.parse()?, spans));
+                    return Ok(());
+                }
+
+                if meta.path.is_ident("mut") {
+                    attr.is_mut = true;
                     return Ok(());
                 }
 
                 if meta.path.is_ident(COPY) {
-                    field.ty.kind = FieldTypeKind::Copy(true);
+                    attr.ty.kind = FieldTypeKind::Copy(true);
                     return Ok(());
                 }
 
                 if meta.path.is_ident(NO_COPY) {
-                    field.ty.kind = FieldTypeKind::Copy(false);
+                    attr.ty.kind = FieldTypeKind::Copy(false);
                     return Ok(());
                 }
 
                 if meta.path.is_ident("std") {
-                    field.ty.kind = FieldTypeKind::Std;
+                    attr.ty.kind = FieldTypeKind::Std;
                     return Ok(());
                 }
 
                 if meta.path.is_ident("to_owned_with") {
                     let (path, _) = parse_path(&meta)?;
-                    field.to_owned = path;
+                    attr.to_owned = path;
                     return Ok(());
                 }
 
                 if meta.path.is_ident("borrow_with") {
                     let (path, _) = parse_path(&meta)?;
-                    field.borrow = path;
+                    attr.borrow = path;
                     return Ok(());
                 }
 
                 if meta.path.is_ident("with") {
                     let (path, span) = parse_path(&meta)?;
 
-                    field.to_owned = path.clone();
-                    field.to_owned.segments.push(syn::PathSegment {
+                    attr.to_owned = path.clone();
+                    attr.to_owned.segments.push(syn::PathSegment {
                         ident: syn::Ident::new("to_owned", span),
                         arguments: syn::PathArguments::None,
                     });
 
-                    field.borrow = path;
-                    field.borrow.segments.push(syn::PathSegment {
+                    attr.borrow = path;
+                    attr.borrow.segments.push(syn::PathSegment {
                         ident: syn::Ident::new("borrow", span),
                         arguments: syn::PathArguments::None,
                     });
@@ -252,12 +262,12 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
             })
         } else if a.path().is_ident(BORROWED_ATTR) {
             a.parse_args_with(|input: ParseStream<'_>| {
-                field.attributes.borrow.push(input.parse()?);
+                attr.attributes.borrow.push(input.parse()?);
                 Ok(())
             })
         } else if a.path().is_ident(OWNED_ATTR) {
             a.parse_args_with(|input: ParseStream<'_>| {
-                field.attributes.own.push(input.parse()?);
+                attr.attributes.own.push(input.parse()?);
                 Ok(())
             })
         } else {
@@ -269,7 +279,7 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
         }
     }
 
-    Ok(field)
+    Ok(attr)
 }
 
 fn parse_path(meta: &ParseNestedMeta) -> syn::Result<(syn::Path, proc_macro2::Span)> {

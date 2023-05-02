@@ -1,18 +1,14 @@
 #[cfg(feature = "std")]
-use core::hash::Hash;
-#[cfg(feature = "std")]
-use std::collections::{BTreeMap, HashMap, LinkedList};
-
-use crate::Borrow;
+mod std;
 
 /// Borrow mutably from self.
 ///
-/// This works similarly to [`BorrowMut`][std::borrow::BorrowMut] but allows
-/// borrowing compoundly from `&self` by defining a [generic `TargetMut`]. This
-/// means it's not just limited to returning an immediate reference to the
-/// borrowed value but can return something which receives lifetime parameters
-/// that borrows from self. This is called "compound borrowing" because it lets
-/// you return types which contains compound references.
+/// This works similarly to [`BorrowMut`][std-borrow-mut] but allows borrowing
+/// compoundly from `&self` by defining a [generic `TargetMut`]. This means it's
+/// not just limited to returning an immediate reference to the borrowed value
+/// but can return something which receives lifetime parameters that borrows
+/// from self. This is called "compound borrowing" because it lets you return
+/// types which contains compound references.
 ///
 /// It is recommended that you use [`borrow_mut`][crate::borrow_mut()] instead
 /// of importing this trait.
@@ -21,9 +17,9 @@ use crate::Borrow;
 ///
 /// # What about `std::borrow::BorrowMut`?
 ///
-/// The [`BorrowMut`][std::borrow::BorrowMut] trait as defined can't perform
-/// compound borrows from `&mut self`. Because the `borrow_mut` method
-/// immediately returns *a reference* to the borrowed type.
+/// The [`BorrowMut`][std-borrow-mut] trait as defined can't perform compound
+/// borrows from `&mut self`. Because the `borrow_mut` method immediately
+/// returns *a reference* to the borrowed type.
 ///
 /// ```
 /// # trait Borrow<Borrowed: ?Sized> { fn borrow(&self) -> &Borrowed; }
@@ -78,11 +74,12 @@ use crate::Borrow;
 /// ```
 ///
 /// A catch here is that `BorrowMut` can only be implemented once for each time,
-/// compared to [`BorrowMut<T>`][std::borrow::BorrowMut]. But for our purposes this is
+/// compared to [`BorrowMut<T>`][std-borrow-mut]. But for our purposes this is
 /// fine. This crate is primarily intended to work with two symmetrical types
 /// and any deviation from that pattern can be handled by customizing the
 /// behavior of the [`#[borrowme]`][crate::borrowme] attribute.
 ///
+/// [std-borrow-mut]: ::std::borrow::BorrowMut
 /// [generic `TargetMut`]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
 pub trait BorrowMut {
     type TargetMut<'a>
@@ -91,16 +88,6 @@ pub trait BorrowMut {
 
     /// Borrow mutably from `self`.
     fn borrow_mut(&mut self) -> Self::TargetMut<'_>;
-}
-
-#[cfg(feature = "std")]
-impl BorrowMut for String {
-    type TargetMut<'a> = &'a mut String;
-
-    #[inline]
-    fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
-        self
-    }
 }
 
 impl<T> BorrowMut for Option<T>
@@ -123,103 +110,3 @@ impl<T> BorrowMut for [T] {
         self
     }
 }
-
-macro_rules! seq {
-    (cap $seq:ident, $insert:ident $(, $trait:path)* $(,)?) => {
-        #[cfg(feature = "std")]
-        impl<T> BorrowMut for $seq<T>
-        where
-            T: BorrowMut,
-            $(for<'a> T::TargetMut<'a>: $trait,)*
-        {
-            type TargetMut<'a> = $seq<T::TargetMut<'a>> where T: 'a;
-
-            #[inline]
-            fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
-                let mut out = <$seq<_>>::with_capacity(self.len());
-
-                for value in self {
-                    out.$insert(value.borrow_mut());
-                }
-
-                out
-            }
-        }
-    };
-
-    ($seq:ident, $insert:ident $(, $trait:path)* $(,)?) => {
-        #[cfg(feature = "std")]
-        impl<T> BorrowMut for $seq<T>
-        where
-            T: BorrowMut,
-            $(for<'a> T::TargetMut<'a>: $trait,)*
-        {
-            type TargetMut<'a> = $seq<T::TargetMut<'a>> where T: 'a;
-
-            #[inline]
-            fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
-                let mut out = <$seq<_>>::new();
-
-                for value in self {
-                    out.$insert(value.borrow_mut());
-                }
-
-                out
-            }
-        }
-    };
-}
-
-macro_rules! map {
-    (cap $map:ident, $insert:ident $(, $trait:path)* $(,)?) => {
-        #[cfg(feature = "std")]
-        impl<K, V> BorrowMut for $map<K, V>
-        where
-            K: Borrow,
-            V: BorrowMut,
-            $(for<'a> K::Target<'a>: $trait,)*
-        {
-            type TargetMut<'a> = $map<K::Target<'a>, V::TargetMut<'a>> where K: 'a, V: 'a;
-
-            #[inline]
-            fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
-                let mut out = <$map<_, _>>::with_capacity(self.len());
-
-                for (key, value) in self {
-                    out.$insert(key.borrow(), value.borrow_mut());
-                }
-
-                out
-            }
-        }
-    };
-
-    ($map:ident, $insert:ident $(, $trait:path)* $(,)?) => {
-        #[cfg(feature = "std")]
-        impl<K, V> BorrowMut for $map<K, V>
-        where
-            K: Borrow,
-            V: BorrowMut,
-            $(for<'a> K::Target<'a>: $trait,)*
-        {
-            type TargetMut<'a> = $map<K::Target<'a>, V::TargetMut<'a>> where K: 'a, V: 'a;
-
-            #[inline]
-            fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
-                let mut out = <$map<_, _>>::new();
-
-                for (key, value) in self {
-                    out.$insert(key.borrow(), value.borrow_mut());
-                }
-
-                out
-            }
-        }
-    };
-}
-
-seq!(cap Vec, push);
-seq!(LinkedList, push_back);
-
-map!(cap HashMap, insert, Hash, Eq);
-map!(BTreeMap, insert, PartialOrd, Ord, Eq);

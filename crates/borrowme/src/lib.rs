@@ -373,6 +373,8 @@
 /// * [`#[owned(<type>)]` or `#[borrowme(owned = <type>)]`][owned] which is a
 ///   required attribute for specifying the owned type a field is being
 ///   converted into.
+/// * [`#[borrowme(mut)]`][mut] to indicate that the field needs mutable access
+///   to the container.
 /// * [`#[borrowme(to_owned_with = <path>)]`][to_owned_with],
 ///   [`#[borrowme(borrow_with = <path>)]`][borrow_with], and [`#[borrowme(with
 ///   = <path>)]`][with] which are used for customizing behavior.
@@ -416,6 +418,29 @@
 ///
 /// fn borrow_my_type(this: &MyOwnedType) -> &MyType {
 ///     &MyType
+/// }
+/// ```
+///
+/// <br>
+///
+/// #### `#[borrowme(mut)]` field attribute
+///
+/// Indicates that the field required mutable access to the parent container.
+///
+/// By default this uses heuristics. If a `&mut T` reference is noticed in the
+/// field type mutable access is assumed.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// pub struct Text<'a> {
+///     text: &'a mut String,
+/// }
+///
+/// #[borrowme]
+/// pub struct Word<'a> {
+///     #[borrowme(mut)]
+///     text: Text<'a>,
 /// }
 /// ```
 ///
@@ -705,6 +730,7 @@
 /// [with]: #borrowmewith--path-field-attribute
 /// [copy]: #copy-and-no_copy-field-attribute
 /// [std]: #borrowmestd-field-attribute
+/// [mut]: #borrowmemut-field-attribute
 /// [b-f]: #borrowed_attrmeta-field-attribute
 /// [o-f]: #owned_attrmeta-field-attribute
 #[doc(inline)]
@@ -713,9 +739,7 @@ pub use borrowme_macros::borrowme;
 mod borrow;
 pub use self::borrow::Borrow;
 
-#[cfg(borrowme_borrow_mut)]
 mod borrow_mut;
-#[cfg(borrowme_borrow_mut)]
 pub use self::borrow_mut::BorrowMut;
 
 mod to_owned;
@@ -751,4 +775,20 @@ where
     T: ?Sized + Borrow,
 {
     value.borrow()
+}
+
+/// Borrow mutably from the given value.
+///
+/// This helper function is provided so that you don't have to have the
+/// [`BorrowMut`] trait in scope, and make it explicit when this crate is being
+/// used since "borrowing" is not a cheap operation in this crate.
+///
+/// This also prevents conflicts with the built-in
+/// [`BorrowMut`][std::borrow::BorrowMut].
+#[inline]
+pub fn borrow_mut<T>(value: &mut T) -> T::TargetMut<'_>
+where
+    T: ?Sized + BorrowMut,
+{
+    value.borrow_mut()
 }
