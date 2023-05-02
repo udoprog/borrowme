@@ -41,22 +41,45 @@
 //! }
 //!
 //! impl borrowme::ToOwned for Word<'_> {
-//!     type Owned = OwnedWord;
-//!
-//!     fn to_owned(&self) -> OwnedWord {
-//!         /* .. */
-//!         # todo!()
-//!     }
+//!     /* .. */
+//! # type Owned = OwnedWord;
+//! # fn to_owned(&self) -> OwnedWord { todo!() }
 //! }
 //!
 //! impl borrowme::Borrow for OwnedWord {
-//!     type Target<'a> = Word<'a>;
-//!
-//!     fn borrow(&self) -> Word<'_> {
-//!         /* .. */
-//!         # todo!()
-//!     }
+//!     /* .. */
+//! # type Target<'a> = Word<'a>;
+//! # fn borrow(&self) -> Word<'_> { todo!() }
 //! }
+//! ```
+//!
+//! By itself this isn't much, but here's the big trick. Types using this crate
+//! can be composed and converted into their borrowed or owned counterparts as
+//! needed:
+//!
+//! ```
+//! # use borrowme::borrowme;
+//! use std::collections::HashMap;
+//!
+//! #[borrowme]
+//! struct Word<'a> {
+//!     text: &'a str,
+//!     lang: Option<&'a str>,
+//!     examples: Vec<&'a str>,
+//! }
+//!
+//! #[borrowme]
+//! struct Dictionary<'a> {
+//!     words: HashMap<&'a str, Word<'a>>,
+//! }
+//!
+//! let dictionary = Dictionary {
+//!     /* .. */
+//! # words: HashMap::new(),
+//! };
+//!
+//! let owned_dictionary: OwnedDictionary = borrowme::to_owned(&dictionary);
+//! let dictionary2: Dictionary<'_> = borrowme::borrow(&owned_dictionary);
 //! ```
 //!
 //! <br>
