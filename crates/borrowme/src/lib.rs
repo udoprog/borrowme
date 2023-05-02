@@ -672,6 +672,11 @@ pub use borrowme_macros::borrowme;
 mod borrow;
 pub use self::borrow::Borrow;
 
+#[cfg(borrowme_borrow_mut)]
+mod borrow_mut;
+#[cfg(borrowme_borrow_mut)]
+pub use self::borrow_mut::BorrowMut;
+
 mod to_owned;
 pub use self::to_owned::ToOwned;
 

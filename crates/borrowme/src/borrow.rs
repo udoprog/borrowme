@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 /// reference* to the borrowed type.
 ///
 /// ```
-/// pub trait Borrow<Borrowed: ?Sized> {
+/// trait Borrow<Borrowed: ?Sized> {
 ///     fn borrow(&self) -> &Borrowed;
 /// }
 /// ```
@@ -48,7 +48,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList};
 ///
 /// ```text
 /// error[E0515]: cannot return reference to temporary value
-///  --> src\borrow.rs:37:9
+///  --> src/borrow.rs:37:9
 ///   |
 /// 9 |         &Word(self.0.as_str())
 ///   |         ^---------------------
