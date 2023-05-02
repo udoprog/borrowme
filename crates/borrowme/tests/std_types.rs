@@ -14,4 +14,6 @@ struct CowStruct<'a> {
     borrowed_path: &'a Path,
     borrowed_os_str: &'a OsStr,
     borrowed_c_str: &'a CStr,
+    #[borrowme(owned = Box<[u8]>, to_owned_with = Box::from)]
+    boxed_bytes: &'a [u8],
 }

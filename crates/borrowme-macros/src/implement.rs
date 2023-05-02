@@ -89,7 +89,7 @@ impl ToTokens for Binding {
 }
 
 struct BoundAccess<'a> {
-    copy: bool,
+    use_reference: bool,
     access: Access,
     binding: &'a Binding,
 }
@@ -109,7 +109,7 @@ impl BoundAccess<'_> {
                     member: self.binding.as_member(),
                 });
 
-                if self.copy {
+                if !self.use_reference {
                     return expr;
                 }
 
@@ -460,14 +460,14 @@ fn process_fields(
             }
         };
 
-        let (to_owned, borrow) = match (attr.ty.kind, reference_type, attr.ty.owned) {
+        let (to_owned, borrow) = match (attr.ty.kind, &reference_type, attr.ty.owned) {
             (attr::FieldTypeKind::Copy(true), _, _) => (Call::Ref, Call::Ref),
             (attr::FieldTypeKind::Std, _, Some(ty)) => {
                 o_field.ty = ty.into_type();
                 (Call::Path(&cx.clone_t_clone), Call::Ref)
             }
             (attr::FieldTypeKind::Std, Some(ty), None) => {
-                o_field.ty = ty;
+                o_field.ty = ty.clone();
                 (Call::Path(&cx.clone_t_clone), Call::Ref)
             }
             (_, _, Some(ty)) => {
@@ -487,8 +487,10 @@ fn process_fields(
 
         let member = binding.as_member();
 
+        let is_copy = matches!(attr.ty.kind, attr::FieldTypeKind::Copy(true));
+
         let bound = BoundAccess {
-            copy: matches!(attr.ty.kind, attr::FieldTypeKind::Copy(true)),
+            use_reference: !is_copy && reference_type.is_none(),
             access,
             binding: &binding,
         };
@@ -499,6 +501,12 @@ fn process_fields(
             colon_token: Some(<Token![:]>::default()),
             expr: to_owned.as_expr(&bound),
         });
+
+        let bound = BoundAccess {
+            use_reference: !is_copy,
+            access,
+            binding: &binding,
+        };
 
         borrow_entries.push(syn::FieldValue {
             attrs: Vec::new(),

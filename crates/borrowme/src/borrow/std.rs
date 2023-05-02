@@ -46,6 +46,15 @@ deref!(PathBuf, Path);
 deref!(OsString, OsStr);
 deref!(CString, CStr);
 
+impl<T: ?Sized> Borrow for Box<T> {
+    type Target<'a> = &'a T where T: 'a;
+
+    #[inline]
+    fn borrow(&self) -> Self::Target<'_> {
+        self
+    }
+}
+
 macro_rules! seq {
     (cap $seq:ident, $insert:ident $(, $trait:path)* $(,)?) => {
         impl<T> Borrow for $seq<T>

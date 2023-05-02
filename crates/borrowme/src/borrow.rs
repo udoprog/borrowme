@@ -3,12 +3,12 @@ mod std;
 
 /// Borrow from self.
 ///
-/// This works similarly to [`Borrow`][std::borrow::Borrow] but allows borrowing
-/// compoundly from `&self` by defining a [generic `Target`]. This means it's
-/// not just limited to returning an immediate reference to the borrowed value
-/// but can return something which receives lifetime parameters that borrows
-/// from self. This is called "compound borrowing" because it lets you return
-/// types which contains compound references.
+/// This works similarly to [`Borrow`][::std::borrow::Borrow] but allows
+/// borrowing compoundly from `&self` by defining a [generic `Target`]. This
+/// means it's not just limited to returning an immediate reference to the
+/// borrowed value but can return something which receives lifetime parameters
+/// that borrows from self. This is called "compound borrowing" because it lets
+/// you return types which contains compound references.
 ///
 /// It is recommended that you use [`borrow`][crate::borrow()] instead of
 /// importing this trait.
@@ -17,9 +17,9 @@ mod std;
 ///
 /// # What about `std::borrow::Borrow`?
 ///
-/// The [`Borrow`][std::borrow::Borrow] trait as defined can't perform compound
-/// borrows from `&self`. Because the `borrow` method immediately returns *a
-/// reference* to the borrowed type.
+/// The [`Borrow`][::std::borrow::Borrow] trait as defined can't perform
+/// compound borrows from `&self`. Because the `borrow` method immediately
+/// returns *a reference* to the borrowed type.
 ///
 /// ```
 /// trait Borrow<Borrowed: ?Sized> {
@@ -73,8 +73,8 @@ mod std;
 /// ```
 ///
 /// A catch here is that `Borrow` can only be implemented once for each time,
-/// compared to [`Borrow<T>`][std::borrow::Borrow]. But for our purposes this is
-/// fine. This crate is primarily intended to work with two symmetrical types
+/// compared to [`Borrow<T>`][::std::borrow::Borrow]. But for our purposes this
+/// is fine. This crate is primarily intended to work with two symmetrical types
 /// and any deviation from that pattern can be handled by customizing the
 /// behavior of the [`#[borrowme]`][crate::borrowme] attribute.
 ///
