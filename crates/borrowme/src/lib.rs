@@ -472,15 +472,15 @@
 ///
 /// #### `#[borrowme(borrow_with = <path>)]` field attribute
 ///
-/// Specifies a path to use when making a field owned. By default this is:
-/// * A borrowed `&self.<field>` if `#[borrowme(std)]` is specified.
+/// Specifies a path to use when borrowing a field. By default this is:
+/// * A borrowed `&self.<field>` if `#[borrowme(std)]` is specified and the
+///   field is not mutable.
 /// * An owned `self.<field>` expression if `#[copy]` is specified.
-/// * `::borrowme::Borrowed::borrow`.
+/// * `::borrowme::Borrow::borrow`.
 ///
 /// ```
 /// # use borrowme::borrowme;
 /// #[borrowme]
-/// #[derive(Clone, Debug)]
 /// pub struct Word<'a> {
 ///     #[borrowme(owned = Option<String>, borrow_with = option_borrow)]
 ///     lang: Option<&'a str>,
@@ -497,6 +497,34 @@
 ///
 /// <br>
 ///
+/// #### `#[borrowme(borrow_mut_with = <path>)]` field attribute
+///
+/// Using this implies `#[borrowme(mut)]`.
+///
+/// Specifies a path to use when borrowing a mutable field. By default this is:
+/// * A borrowed `&mut self.<field>` if `#[borrowme(std)]` is specified and a
+///   mutable field is detected or specified with `#[borrowme(mut)]`.
+/// * An owned `self.<field>` expression if `#[copy]` is specified.
+/// * `::borrowme::BorrowMut::borrow_mut`.
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// pub struct Word<'a> {
+///     #[borrowme(owned = Option<String>, borrow_mut_with = option_borrow)]
+///     lang: Option<&'a mut str>,
+///     #[borrowme(owned = Option<String>, borrow_mut_with = Option::as_deref_mut)]
+///     lang2: Option<&'a mut str>,
+/// }
+///
+/// #[inline]
+/// pub(crate) fn option_borrow(option: &mut Option<String>) -> Option<&mut str> {
+///     option.as_deref_mut()
+/// }
+/// ```
+///
+/// <br>
+///
 /// #### `#[borrowme(with = <path>)]` field attribute
 ///
 /// Specifies a path to use when calling `to_owned` and `borrow` on a field.
@@ -506,7 +534,7 @@
 /// Unless `#[copy]` or `#[borrowme(std)]` are specified, these are by
 /// default:
 /// * `::borrowme::ToOwned::to_owned`
-/// * `::borrowme::Borrowed::borrow`.
+/// * `::borrowme::Borrow::borrow`.
 ///
 /// ```
 /// # mod interior {

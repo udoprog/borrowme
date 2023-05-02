@@ -11,7 +11,7 @@ pub(crate) struct Ctxt {
     pub(crate) borrowme_borrow_t: syn::Path,
     pub(crate) borrowme_borrow_mut_t: syn::Path,
     pub(crate) borrowme_to_owned_t: syn::Path,
-    pub(crate) borrowme_to_owned_t_borrow: syn::Path,
+    pub(crate) borrowme_to_owned_t_to_owned: syn::Path,
 }
 
 impl Ctxt {
@@ -24,7 +24,7 @@ impl Ctxt {
             borrowme_borrow_mut_t: path(span, ["borrowme", "BorrowMut"]),
             borrowme_to_owned_t: path(span, ["borrowme", "ToOwned"]),
             clone_t_clone: path(span, ["core", "clone", "Clone", "clone"]),
-            borrowme_to_owned_t_borrow: path(span, ["borrowme", "ToOwned", "to_owned"]),
+            borrowme_to_owned_t_to_owned: path(span, ["borrowme", "ToOwned", "to_owned"]),
         }
     }
 

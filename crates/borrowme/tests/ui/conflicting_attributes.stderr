@@ -1,0 +1,107 @@
+error: #[borrowme] Duplicate field kind from no_copy attribute.
+  --> tests/ui/conflicting_attributes.rs:12:7
+   |
+12 |     #[no_copy]
+   |       ^^^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:11:7
+   |
+11 |     #[copy]
+   |       ^^^^
+
+error: #[borrowme] Duplicate field kind from copy attribute.
+  --> tests/ui/conflicting_attributes.rs:15:7
+   |
+15 |     #[copy]
+   |       ^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:14:7
+   |
+14 |     #[copy]
+   |       ^^^^
+
+error: #[borrowme] Duplicate field kind from no_copy attribute.
+  --> tests/ui/conflicting_attributes.rs:18:7
+   |
+18 |     #[no_copy]
+   |       ^^^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:17:7
+   |
+17 |     #[no_copy]
+   |       ^^^^^^^
+
+error: #[borrowme] Duplicate field kind from copy attribute.
+  --> tests/ui/conflicting_attributes.rs:21:7
+   |
+21 |     #[copy]
+   |       ^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:20:16
+   |
+20 |     #[borrowme(std)]
+   |                ^^^
+
+error: #[borrowme] Duplicate attribute setting mutability.
+  --> tests/ui/conflicting_attributes.rs:24:16
+   |
+24 |     #[borrowme(mut)]
+   |                ^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:23:16
+   |
+23 |     #[borrowme(mut)]
+   |                ^^^
+
+error: #[borrowme] Duplicate owned attribute.
+  --> tests/ui/conflicting_attributes.rs:27:16
+   |
+27 |     #[borrowme(owned = String)]
+   |                ^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:26:7
+   |
+26 |     #[owned(String)]
+   |       ^^^^^
+
+error: #[borrowme] Duplicate borrow_with.
+  --> tests/ui/conflicting_attributes.rs:29:29
+   |
+29 |     #[borrowme(with = path, borrow_with = path2)]
+   |                             ^^^^^^^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:29:23
+   |
+29 |     #[borrowme(with = path, borrow_with = path2)]
+   |                       ^^^^
+
+error: #[borrowme] Duplicate borrow_mut_with.
+  --> tests/ui/conflicting_attributes.rs:31:29
+   |
+31 |     #[borrowme(with = path, borrow_mut_with = path2)]
+   |                             ^^^^^^^^^^^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:31:23
+   |
+31 |     #[borrowme(with = path, borrow_mut_with = path2)]
+   |                       ^^^^
+
+error: #[borrowme] Duplicate to_owned_with.
+  --> tests/ui/conflicting_attributes.rs:33:29
+   |
+33 |     #[borrowme(with = path, to_owned_with = path2)]
+   |                             ^^^^^^^^^^^^^
+
+error: #[borrowme] Existing one is here.
+  --> tests/ui/conflicting_attributes.rs:33:23
+   |
+33 |     #[borrowme(with = path, to_owned_with = path2)]
+   |                       ^^^^

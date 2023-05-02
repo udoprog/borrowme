@@ -170,7 +170,7 @@ pub(crate) fn implement(
 
     let (to_owned_fn, borrow_fn) = match (&mut output, &mut item) {
         (syn::Item::Struct(o_st), syn::Item::Struct(b_st)) => {
-            let attr = attr::container(cx, &o_st.ident, attrs, &o_st.attrs)?;
+            let attr = attr::container(cx, attrs, &o_st.attrs)?;
             attr::strip([&mut o_st.attrs, &mut b_st.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_st.attrs, &mut b_st.attrs);
@@ -180,7 +180,7 @@ pub(crate) fn implement(
                 &mut o_st.generics,
                 o_st.fields.is_empty(),
             );
-            o_st.ident = attr.owned_ident;
+            o_st.ident = attr.owned_ident(&o_st.ident);
 
             let mut to_owned_entries = Vec::new();
             let mut borrow_entries = Vec::new();
@@ -231,7 +231,7 @@ pub(crate) fn implement(
             (to_owned_fn, borrow_fn)
         }
         (syn::Item::Enum(o_en), syn::Item::Enum(b_en)) => {
-            let attr = attr::container(cx, &o_en.ident, attrs, &o_en.attrs)?;
+            let attr = attr::container(cx, attrs, &o_en.attrs)?;
             attr::strip([&mut o_en.attrs, &mut b_en.attrs]);
 
             apply_attributes(&attr.attributes, &mut o_en.attrs, &mut b_en.attrs);
@@ -241,7 +241,7 @@ pub(crate) fn implement(
                 &mut o_en.generics,
                 o_en.variants.iter().all(|v| v.fields.is_empty()),
             );
-            o_en.ident = attr.owned_ident;
+            o_en.ident = attr.owned_ident(&o_en.ident);
 
             let mut to_owned_variants = Vec::new();
             let mut borrow_variants = Vec::new();
@@ -442,13 +442,13 @@ fn process_fields(
         let needs_mut = lifetimes
             .iter()
             .any(|(_, _, mut_token)| mut_token.is_some());
-        let needs_mut = attr.is_mut || needs_mut;
+        let needs_mut = attr.is_mut() || needs_mut;
         *parent_needs_mut |= needs_mut;
 
         // Provide diagnostics in case there are field lifetimes we can't
         // make anything out of. Such as a `&'a str` field marked with
         // `#[copy]`.
-        match attr.ty.kind {
+        match attr.ty.kind() {
             attr::FieldTypeKind::Copy(true) => {
                 for (span, lt, _) in lifetimes {
                     let mut error = if lt.is_some() {
@@ -468,7 +468,7 @@ fn process_fields(
                 }
             }
             _ => {
-                let is_std_ref = matches!(attr.ty.kind, attr::FieldTypeKind::Std if immediate_reference.is_some());
+                let is_std_ref = matches!(attr.ty.kind(), attr::FieldTypeKind::Std if immediate_reference.is_some());
 
                 // For non-copy types, build an expression that tries to use the
                 // `ToOwned` implementation to figure out which type to use.
@@ -494,11 +494,11 @@ fn process_fields(
                             path,
                         });
 
-                        attr.ty.owned = Some(Respan::new(ty, field_ty_spans));
+                        attr.ty.set_owned(Respan::new(ty, field_ty_spans));
                     }
                     TypeHint::Copy => {
-                        if !matches!(attr.ty.kind, attr::FieldTypeKind::Copy(false)) {
-                            attr.ty.kind = attr::FieldTypeKind::Copy(true);
+                        if !matches!(attr.ty.kind(), attr::FieldTypeKind::Copy(false)) {
+                            attr.ty.set_kind(attr::FieldTypeKind::Copy(true));
                         }
                     }
                     _ => {}
@@ -506,10 +506,10 @@ fn process_fields(
             }
         };
 
-        let (to_owned, borrow) = match (attr.ty.kind, &immediate_reference, attr.ty.owned) {
+        let (to_owned, borrow) = match (attr.ty.kind(), &immediate_reference, attr.ty.owned()) {
             (attr::FieldTypeKind::Copy(true), _, _) => (Call::Ref, Call::Ref),
             (attr::FieldTypeKind::Std, _, Some(ty)) => {
-                o_field.ty = ty.into_type();
+                o_field.ty = ty.as_type();
                 (Call::Path(&cx.clone_t_clone), Call::Ref)
             }
             (attr::FieldTypeKind::Std, Some(ty), None) => {
@@ -517,15 +517,15 @@ fn process_fields(
                 (Call::Path(&cx.clone_t_clone), Call::Ref)
             }
             (_, _, Some(ty)) => {
-                o_field.ty = ty.into_type();
+                o_field.ty = ty.as_type();
 
                 let borrow = if needs_mut {
-                    &attr.borrow_mut
+                    attr.borrow_mut(cx)
                 } else {
-                    &attr.borrow
+                    attr.borrow(cx)
                 };
 
-                (Call::Path(&attr.to_owned), Call::Path(borrow))
+                (Call::Path(attr.to_owned(cx)), Call::Path(borrow))
             }
             _ => {
                 let clone = &cx.clone_t_clone;
@@ -540,7 +540,7 @@ fn process_fields(
 
         let member = binding.as_member();
 
-        let is_copy = matches!(attr.ty.kind, attr::FieldTypeKind::Copy(true));
+        let is_copy = matches!(attr.ty.kind(), attr::FieldTypeKind::Copy(true));
 
         let bound = BoundAccess {
             use_reference: !is_copy && immediate_reference.is_none(),
