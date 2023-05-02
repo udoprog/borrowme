@@ -5,14 +5,16 @@
 //! The missing compound borrowing for Rust.
 //!
 //! Rust comes with two sibling traits which that can convert from owned to
-//! borrowed: [`ToOwned`][std-to-owned] and [`Borrow`][std-borrow].
+//! borrowed: [`ToOwned`][std-to-owned], [`Borrow`][std-borrow] and
+//! [`BorrowMut`][std-borrow-mut].
 //!
 //! These can convert most simple types such as `&str` to and from `String`. But
 //! lets think of this in a broader perspective. How to we convert a type that
 //! *has lifetimes*, to one which *does not*? This crate defines its own
-//! [`ToOwned`] and [`Borrow`] traits which serve a similar purpose to the ones
-//! in `std` but are implemented so that they can do this not only for simple
-//! references but also for *compound types* which receives lifetimes.
+//! [`ToOwned`], [`Borrow`] and [`BorrowMut`] traits which serve a similar
+//! purpose to the ones in `std` but are implemented so that they can do this
+//! not only for simple references but also for *compound types* which receives
+//! lifetimes.
 //!
 //! To help us implement these traits the [`#[borrowme]`][borrowme] attribute
 //! macro is provided ([see this section][borrowme-derive] for why it's not a
@@ -21,35 +23,42 @@
 //! ```
 //! # use borrowme::borrowme;
 //! #[borrowme]
-//! #[derive(Debug, Clone)]
+//! #[derive(Clone)]
+//! #[borrowed_attr(derive(Copy))]
 //! struct Word<'a> {
 //!     text: &'a str,
-//!     lang: Option<&'a str>,
-//!     examples: Vec<String>,
 //! }
 //! ```
 //!
-//! With this we get the following additional structs and trait implementations:
+//! From this we get the following types and implementations:
 //!
 //! ```
-//! # struct Word<'a>(&'a ());
-//! #[derive(Debug, Clone)]
+//! #[derive(Clone, Copy)]
+//! struct Word<'a> {
+//!     text: &'a str,
+//! }
+//!
+//! #[derive(Clone)]
 //! struct OwnedWord {
 //!     text: String,
-//!     lang: Option<String>,
-//!     examples: Vec<String>,
 //! }
 //!
 //! impl borrowme::ToOwned for Word<'_> {
-//!     /* .. */
-//! # type Owned = OwnedWord;
-//! # fn to_owned(&self) -> OwnedWord { todo!() }
+//!     type Owned = OwnedWord;
+//!
+//!     fn to_owned(&self) -> OwnedWord {
+//!         /* .. */
+//!         # todo!()
+//!     }
 //! }
 //!
 //! impl borrowme::Borrow for OwnedWord {
-//!     /* .. */
-//! # type Target<'a> = Word<'a>;
-//! # fn borrow(&self) -> Word<'_> { todo!() }
+//!     type Target<'a> = Word<'a>;
+//!
+//!     fn borrow(&self) -> Word<'_> {
+//!         /* .. */
+//!         # todo!()
+//!     }
 //! }
 //! ```
 //!
@@ -64,8 +73,6 @@
 //! #[borrowme]
 //! struct Word<'a> {
 //!     text: &'a str,
-//!     lang: Option<&'a str>,
-//!     examples: Vec<&'a str>,
 //! }
 //!
 //! #[borrowme]
@@ -75,7 +82,7 @@
 //!
 //! let dictionary = Dictionary {
 //!     /* .. */
-//! # words: HashMap::new(),
+//!     # words: HashMap::new(),
 //! };
 //!
 //! let owned_dictionary: OwnedDictionary = borrowme::to_owned(&dictionary);
@@ -85,12 +92,14 @@
 //! <br>
 //!
 //! [`Borrow`]: https://docs.rs/borrowme/latest/borrowme/trait.Borrow.html
+//! [`BorrowMut`]: https://docs.rs/borrowme/latest/borrowme/trait.BorrowMut.html
 //! [`ToOwned`]: https://docs.rs/borrowme/latest/borrowme/trait.ToOwned.html
 //! [borrowme-derive]: https://docs.rs/borrowme/latest/borrowme/attr.borrowme.html#why-isnt-this-a-derive
 //! [borrowme]: https://docs.rs/borrowme/latest/borrowme/attr.borrowme.html
 //! [generic associated types]: https://blog.rust-lang.org/2022/10/28/gats-stabilization.html
-//! [std-borrow]: std::borrow::Borrow
-//! [std-to-owned]: std::borrow::ToOwned
+//! [std-borrow-mut]: https://doc.rust-lang.org/std/borrow/trait.BorrowMut.html
+//! [std-borrow]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
+//! [std-to-owned]: https://doc.rust-lang.org/std/borrow/trait.ToOwned.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -781,6 +790,49 @@ pub use self::to_owned::ToOwned;
 ///
 /// Using this also prevents conflicts with the built-in
 /// [`std::borrow::ToOwned`] which is in the prelude.
+///
+/// <br>
+///
+/// # Examples
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// struct Word<'a> {
+///     text: &'a str,
+/// }
+///
+/// impl OwnedWord {
+///     fn new(text: &str) -> Self {
+///         Self { text: text.to_owned() }
+///     }
+/// }
+///
+/// #[borrowme]
+/// #[derive(Default)]
+/// struct Dictionary<'a> {
+///     words: Vec<Word<'a>>,
+/// }
+///
+/// fn uppercase(dictionary: OwnedDictionary) -> Vec<String> {
+///     let mut out = Vec::new();
+///
+///     for word in dictionary.words {
+///         out.push(word.text.to_uppercase());
+///     }
+///
+///     out
+/// }
+///
+/// let mut dictionary = Dictionary::default();
+/// dictionary.words.push(Word { text: "Hello" });
+/// dictionary.words.push(Word { text: "World" });
+///
+/// let out = uppercase(borrowme::to_owned(dictionary));
+///
+/// assert_eq!(out[0], "HELLO");
+/// assert_eq!(out[1], "WORLD");
+/// ```
 #[inline]
 pub fn to_owned<T>(value: T) -> T::Owned
 where
@@ -797,6 +849,49 @@ where
 ///
 /// This also prevents conflicts with the built-in
 /// [`Borrow`][std::borrow::Borrow].
+///
+/// <br>
+///
+/// # Examples
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// struct Word<'a> {
+///     text: &'a str,
+/// }
+///
+/// impl OwnedWord {
+///     fn new(text: &str) -> Self {
+///         Self { text: text.to_owned() }
+///     }
+/// }
+///
+/// #[borrowme]
+/// #[derive(Default)]
+/// struct Dictionary<'a> {
+///     words: Vec<Word<'a>>,
+/// }
+///
+/// fn uppercase(dictionary: Dictionary<'_>) -> Vec<String> {
+///     let mut out = Vec::new();
+///
+///     for word in dictionary.words {
+///         out.push(word.text.to_uppercase());
+///     }
+///
+///     out
+/// }
+///
+/// let mut dictionary = OwnedDictionary::default();
+/// dictionary.words.push(OwnedWord::new("Hello"));
+/// dictionary.words.push(OwnedWord::new("World"));
+///
+/// let out = uppercase(borrowme::borrow(&dictionary));
+///
+/// assert_eq!(out[0], "HELLO");
+/// assert_eq!(out[1], "WORLD");
+/// ```
 #[inline]
 pub fn borrow<T>(value: &T) -> T::Target<'_>
 where
@@ -813,6 +908,46 @@ where
 ///
 /// This also prevents conflicts with the built-in
 /// [`BorrowMut`][std::borrow::BorrowMut].
+///
+/// <br>
+///
+/// # Examples
+///
+/// ```
+/// # use borrowme::borrowme;
+/// #[borrowme]
+/// struct Word<'a> {
+///     text: &'a mut String,
+/// }
+///
+/// impl OwnedWord {
+///     fn new(text: &str) -> Self {
+///         Self { text: text.to_owned() }
+///     }
+/// }
+///
+/// #[borrowme]
+/// #[derive(Default)]
+/// struct Dictionary<'a> {
+///     #[borrowme(mut)]
+///     words: Vec<Word<'a>>,
+/// }
+///
+/// fn uppercase(dictionary: Dictionary<'_>) {
+///     for word in dictionary.words {
+///         *word.text = word.text.to_uppercase();
+///     }
+/// }
+///
+/// let mut dictionary = OwnedDictionary::default();
+/// dictionary.words.push(OwnedWord::new("Hello"));
+/// dictionary.words.push(OwnedWord::new("World"));
+///
+/// uppercase(borrowme::borrow_mut(&mut dictionary));
+///
+/// assert_eq!(dictionary.words[0].text, "HELLO");
+/// assert_eq!(dictionary.words[1].text, "WORLD");
+/// ```
 #[inline]
 pub fn borrow_mut<T>(value: &mut T) -> T::TargetMut<'_>
 where
