@@ -1,12 +1,12 @@
 use borrowme::borrowme;
 
-#[borrowme(prefix = Prefix)]
+#[borrowme(name = StructBuf)]
 struct Struct<'a> {
     a: &'a str,
 }
 
-#[borrowme(prefix = Prefix)]
+#[borrowme(name = UnnamedBuf)]
 struct Unnamed<'a>(&'a str);
 
-#[borrowme(prefix = Prefix)]
+#[borrowme(name = EmptyBuf)]
 struct Empty;
