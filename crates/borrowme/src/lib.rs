@@ -131,8 +131,9 @@
 ///
 /// #### `&[T]`
 ///
-/// The `ToOwned` implementation produces a `Vec<T>`, while borrowing that
-/// produces a `Vec<&T::Target>`. This can be fixed using [`Vec::as_slice`].
+/// The [`ToOwned`] implementation produces a `Vec<T>`, while [`Borrow`] of
+/// `Vec<T>` produces a `Vec<&T::Target>`. This can be fixed using
+/// [`Vec::as_slice`].
 ///
 /// ```
 /// use borrowme::borrowme;
@@ -141,6 +142,23 @@
 /// struct VecField<'a> {
 ///     #[borrowme(borrow_with = Vec::as_slice)]
 ///     strings: &'a [String],
+/// }
+/// ```
+///
+/// <br>
+///
+/// #### `&[T]` as an owned `Box<[T]>`
+///
+/// The [`ToOwned`] implementation produces a `Vec<T>`, while borrowing that
+/// produces a `Vec<&T::Target>`. This can be fixed using [`Box::from`].
+///
+/// ```
+/// use borrowme::borrowme;
+///
+/// #[borrowme]
+/// struct Bytes<'a> {
+///     #[borrowme(owned = Box<[u8]>, to_owned_with = Box::from)]
+///     bytes: &'a [u8],
 /// }
 /// ```
 ///
@@ -157,8 +175,8 @@
 ///
 /// This should hopefully illustrate the issue:
 ///
-/// ```no_compile
-/// use borrow::{ToOwned, Borrow};
+/// ```compile_fail
+/// use borrowme::{ToOwned, Borrow};
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq, ToOwned)]
 /// #[owned_attr(derive(Debug, Clone, PartialEq, Eq, Borrow))]
