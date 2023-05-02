@@ -1,6 +1,6 @@
 [package]
 name = "borrowme"
-version = "0.0.10"
+version = "0.0.11"
 authors = ["John-John Tedro <udoprog@tedro.se>"]
 edition = "2018"
 rust-version = "1.65"
@@ -18,7 +18,7 @@ default = ["std"]
 std = []
 
 [dependencies]
-borrowme-macros = { path = "../borrowme-macros", version = "=0.0.10" }
+borrowme-macros = { path = "../borrowme-macros", version = "=0.0.11" }
 
 [dev-dependencies]
 serde = { version = "1.0.160", features = ["derive"] }
