@@ -12,7 +12,8 @@ error[E0277]: `MyType` doesn't implement `Debug`
    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyType` with `#[derive(Debug)]`
    |
-6  | #[derive(Debug)]
+6  + #[derive(Debug)]
+7  | struct MyType;
    |
 
 error[E0277]: the trait bound `MyOwnedType: Clone` is not satisfied
@@ -27,7 +28,8 @@ error[E0277]: the trait bound `MyOwnedType: Clone` is not satisfied
    = note: this error originates in the derive macro `Clone` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Clone)]`
    |
-7  | #[derive(Clone)]
+7  + #[derive(Clone)]
+8  | struct MyOwnedType;
    |
 
 error[E0277]: `MyOwnedType` doesn't implement `Debug`
@@ -44,5 +46,6 @@ error[E0277]: `MyOwnedType` doesn't implement `Debug`
    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Debug)]`
    |
-7  | #[derive(Debug)]
+7  + #[derive(Debug)]
+8  | struct MyOwnedType;
    |
