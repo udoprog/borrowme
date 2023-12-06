@@ -9,7 +9,7 @@ documentation = "https://docs.rs/borrowme"
 readme = "README.md"
 homepage = "https://github.com/udoprog/borrowme"
 repository = "https://github.com/udoprog/borrowme"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 keywords = ["borrow", "lifetime", "macros"]
 categories = ["development-tools", "no-std", "rust-patterns"]
 
