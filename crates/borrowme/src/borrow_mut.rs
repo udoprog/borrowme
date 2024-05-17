@@ -24,7 +24,7 @@ mod std;
 /// ```
 /// # trait Borrow<Borrowed: ?Sized> { fn borrow(&self) -> &Borrowed; }
 /// trait BorrowMut<Borrowed: ?Sized>: Borrow<Borrowed> {
-///     fn borrow_mut(&mut self) -> &Borrowed;
+///     fn borrow_mut(&mut self) -> &mut Borrowed;
 /// }
 /// ```
 ///
