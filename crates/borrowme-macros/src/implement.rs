@@ -188,6 +188,7 @@ pub(crate) fn implement(
             process_fields(
                 cx,
                 Access::SelfAccess,
+                attr.kind,
                 &mut o_st.fields,
                 &mut b_st.fields,
                 &mut to_owned_entries,
@@ -250,7 +251,7 @@ pub(crate) fn implement(
             let borrow_ident = b_en.ident.clone();
 
             for (o_variant, b_variant) in o_en.variants.iter_mut().zip(b_en.variants.iter_mut()) {
-                let attr = attr::variant(cx, &o_variant.attrs)?;
+                let attr = attr::variant(cx, &o_variant.attrs, &attr)?;
                 attr::strip([&mut o_variant.attrs, &mut b_variant.attrs]);
 
                 apply_attributes(&attr.attributes, &mut o_variant.attrs, &mut b_variant.attrs);
@@ -261,6 +262,7 @@ pub(crate) fn implement(
                 process_fields(
                     cx,
                     Access::BindingAccess,
+                    attr.kind,
                     &mut o_variant.fields,
                     &mut b_variant.fields,
                     &mut to_owned_entries,
@@ -419,6 +421,7 @@ pub(crate) fn implement(
 fn process_fields(
     cx: &Ctxt,
     access: Access,
+    default_kind: Option<(Span, attr::FieldTypeKind)>,
     o_fields: &mut syn::Fields,
     b_fields: &mut syn::Fields,
     to_owned_entries: &mut Vec<syn::FieldValue>,
@@ -428,7 +431,7 @@ fn process_fields(
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
         let field_ty_spans = field_ty_spans(o_field);
 
-        let mut attr = attr::field(cx, field_ty_spans, &o_field.attrs)?;
+        let mut attr = attr::field(cx, field_ty_spans, &o_field.attrs, default_kind)?;
         attr::strip([&mut o_field.attrs, &mut b_field.attrs]);
         apply_attributes(&attr.attributes, &mut o_field.attrs, &mut b_field.attrs);
 
