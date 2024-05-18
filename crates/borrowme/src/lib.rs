@@ -223,6 +223,9 @@
 ///
 /// This section documents supported container attributes:
 ///
+/// * [`#[borrowme(std)]`][container-std] which acts as if
+///   [`#[borrowme(std)]`][std] is applied to every field and variant in the
+///   container by default.
 /// * [`#[borrowme(name = <ident>)]`][name] which is used to change the name of
 ///   the generated *owned* variant.
 /// * [`#[borrowed_attr(<meta>)]`][b-c] and [`#[owned_attr(<meta>)]`][o-c] which
@@ -245,6 +248,37 @@
 ///     /* body */
 /// # First { text: &'a str },
 /// # Second { text: &'a str },
+/// }
+/// ```
+///
+/// <br>
+///
+/// #### `#[borrowme(std)]` container attribute
+///
+/// This container attribute acts as if [`#[borrowme(std)]`][std] is applied to
+/// every field or variant in the container.
+///
+/// Note that this defeats copy and reference heuristics.
+///
+/// ```
+/// use borrowme::borrowme;
+///
+/// #[borrowme]
+/// #[borrowme(std)]
+/// struct StdStruct<'a> {
+///     a: &'a String,
+///     #[borrowme(copy)]
+///     b: u32,
+/// }
+///
+/// #[borrowme]
+/// #[borrowme(std)]
+/// enum StdEnum<'a> {
+///     Variant {
+///         a: &'a String,
+///         #[borrowme(copy)]
+///         b: u32,
+///     }
 /// }
 /// ```
 ///
@@ -328,6 +362,9 @@
 ///
 /// * [`#[borrowed_attr(<meta>)]`][b-v] and [`#[owned_attr(<meta>)]`][o-v] which
 ///   are used to add custom attributes.
+/// * [`#[borrowme(std)]`][variant-std] which acts as if
+///   [`#[borrowme(std)]`][std] is applied to every field in the variant by
+///   default.
 ///
 /// Variant attributes are attributes which apply to `enum` variants.
 ///
@@ -372,6 +409,32 @@
 /// let word = OwnedWord::default();
 /// assert!(matches!(word, OwnedWord::Unknown));
 /// ```
+///
+/// <br>
+///
+/// #### `#[borrowme(std)]` variant attribute
+///
+/// This container attribute acts as if [`#[borrowme(std)]`][std] is applied to
+/// every field inside of a variant.
+///
+/// Note that this defeats copy and reference heuristics.
+///
+/// ```
+/// use borrowme::borrowme;
+///
+/// #[borrowme]
+/// enum StdEnum<'a> {
+///     #[borrowme(std)]
+///     Variant {
+///         a: &'a String,
+///         #[borrowme(copy)]
+///         b: u32,
+///     }
+/// }
+/// ```
+///
+/// <br>
+///
 ///
 /// <br>
 ///
@@ -756,20 +819,22 @@
 /// }
 /// ```
 ///
-/// [name]: #borrowmename--ident-container-attribute
 /// [b-c]: #borrowed_attrmeta-container-attribute
-/// [o-c]: #owned_attrmeta-container-attribute
+/// [b-f]: #borrowed_attrmeta-field-attribute
 /// [b-v]: #borrowed_attrmeta-variant-attribute
+/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
+/// [container-std]: #borrowmestd-container-attribute
+/// [copy]: #copy-and-no_copy-field-attribute
+/// [mut]: #borrowmemut-field-attribute
+/// [name]: #borrowmename--ident-container-attribute
+/// [o-c]: #owned_attrmeta-container-attribute
+/// [o-f]: #owned_attrmeta-field-attribute
 /// [o-v]: #owned_attrmeta-variant-attribute
 /// [owned]: #ownedtype-or-borrowmeowned--type-field-attributes
-/// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
-/// [borrow_with]: #borrowmeborrow_with--path-field-attribute
-/// [with]: #borrowmewith--path-field-attribute
-/// [copy]: #copy-and-no_copy-field-attribute
 /// [std]: #borrowmestd-field-attribute
-/// [mut]: #borrowmemut-field-attribute
-/// [b-f]: #borrowed_attrmeta-field-attribute
-/// [o-f]: #owned_attrmeta-field-attribute
+/// [to_owned_with]: #borrowmeto_owned_with--path-field-attribute
+/// [variant-std]: #borrowmestd-variant-attribute
+/// [with]: #borrowmewith--path-field-attribute
 #[doc(inline)]
 pub use borrowme_macros::borrowme;
 

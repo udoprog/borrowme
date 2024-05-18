@@ -32,6 +32,8 @@ pub(crate) struct Container {
     pub(crate) owned_ident: Option<(Span, syn::Ident)>,
     /// Attributes to apply.
     pub(crate) attributes: Attributes,
+    /// Default field type kind.
+    pub(crate) kind: Option<(Span, FieldTypeKind)>,
 }
 
 impl Container {
@@ -53,25 +55,34 @@ pub(crate) fn container(
     let mut attr = Container {
         owned_ident: None,
         attributes: Attributes::default(),
+        kind: None,
     };
+
+    macro_rules! set_attr {
+        ($field:ident $(. $field2:ident)*, $meta:expr, $value:expr, $message:expr $(,)?) => {
+            set_attr(cx, &mut attr.$field$(.$field2)*, $meta, $value, $message)
+        }
+    }
 
     for a in attrs.iter().chain(rest) {
         let result = if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
+                let span = meta.path.span();
+
                 if meta.path.is_ident("name") {
                     meta.input.parse::<Token![=]>()?;
-                    set_attr(
-                        cx,
-                        &mut attr.owned_ident,
-                        meta.path.span(),
-                        meta.input.parse()?,
-                        "Duplicate name.",
-                    );
+                    set_attr!(owned_ident, span, meta.input.parse()?, "Duplicate name.",);
+                    return Ok(());
+                }
+
+                if meta.path.is_ident("std") {
+                    let kind = FieldTypeKind::Std;
+                    set_attr!(kind, span, kind, "Duplicate container field kind.");
                     return Ok(());
                 }
 
                 Err(syn::Error::new(
-                    meta.path.span(),
+                    span,
                     format_args!("#[{BORROWME}]: Unsupported attribute."),
                 ))
             })
@@ -99,19 +110,39 @@ pub(crate) fn container(
 
 pub(crate) struct Variant {
     pub(crate) attributes: Attributes,
+    pub(crate) kind: Option<(Span, FieldTypeKind)>,
 }
 
 /// Parse variant attributes.
-pub(crate) fn variant(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Variant, ()> {
+pub(crate) fn variant(
+    cx: &Ctxt,
+    attrs: &[syn::Attribute],
+    container: &Container,
+) -> Result<Variant, ()> {
     let mut variant = Variant {
         attributes: Attributes::default(),
+        kind: None,
     };
+
+    macro_rules! set_attr {
+        ($field:ident $(. $field2:ident)*, $meta:expr, $value:expr, $message:expr $(,)?) => {
+            set_attr(cx, &mut variant.$field$(.$field2)*, $meta, $value, $message)
+        }
+    }
 
     for a in attrs {
         let result = if a.path().is_ident(BORROWME) {
             a.parse_nested_meta(|meta| {
+                let span = meta.path.span();
+
+                if meta.path.is_ident("std") {
+                    let kind = FieldTypeKind::Std;
+                    set_attr!(kind, span, kind, "Duplicate variant field kind.");
+                    return Ok(());
+                }
+
                 Err(syn::Error::new(
-                    meta.path.span(),
+                    span,
                     format_args!("#[{BORROWME}]: Unsupported attribute."),
                 ))
             })
@@ -132,6 +163,10 @@ pub(crate) fn variant(cx: &Ctxt, attrs: &[syn::Attribute]) -> Result<Variant, ()
         if let Err(error) = result {
             cx.error(error);
         }
+    }
+
+    if variant.kind.is_none() {
+        variant.kind = container.kind;
     }
 
     Ok(variant)
@@ -219,7 +254,12 @@ impl Field {
 /// We provide `field_spans` so that the processed `FieldType::Type` can be
 /// respanned to emit better diagnostics in case if fails something like a type
 /// check.
-pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) -> Result<Field, ()> {
+pub(crate) fn field(
+    cx: &Ctxt,
+    spans: (Span, Span),
+    attrs: &[syn::Attribute],
+    default_kind: Option<(Span, FieldTypeKind)>,
+) -> Result<Field, ()> {
     let mut attr = Field {
         is_mut: None,
         ty: FieldType::default(),
@@ -374,6 +414,10 @@ pub(crate) fn field(cx: &Ctxt, spans: (Span, Span), attrs: &[syn::Attribute]) ->
         if let Err(error) = result {
             cx.error(error);
         }
+    }
+
+    if attr.ty.kind.is_none() {
+        attr.ty.kind = default_kind;
     }
 
     Ok(attr)
