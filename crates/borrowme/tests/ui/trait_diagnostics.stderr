@@ -7,7 +7,7 @@ error[E0277]: `MyType` doesn't implement `Debug`
 13 |     lang: &'a MyType,
    |     ^^^^^^^^^^^^^^^^ `MyType` cannot be formatted using `{:?}`
    |
-   = help: the trait `Debug` is not implemented for `MyType`
+   = help: the trait `Debug` is not implemented for `MyType`, which is required by `&&'a MyType: Debug`
    = note: add `#[derive(Debug)]` to `MyType` or manually `impl Debug for MyType`
    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyType` with `#[derive(Debug)]`
@@ -41,7 +41,7 @@ error[E0277]: `MyOwnedType` doesn't implement `Debug`
 13 |     lang: &'a MyType,
    |     ^^^^^^^ `MyOwnedType` cannot be formatted using `{:?}`
    |
-   = help: the trait `Debug` is not implemented for `MyOwnedType`
+   = help: the trait `Debug` is not implemented for `MyOwnedType`, which is required by `&MyOwnedType: Debug`
    = note: add `#[derive(Debug)]` to `MyOwnedType` or manually `impl Debug for MyOwnedType`
    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Debug)]`

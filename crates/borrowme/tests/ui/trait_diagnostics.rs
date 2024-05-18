@@ -13,11 +13,11 @@ pub struct Word<'a> {
     lang: &'a MyType,
 }
 
-fn to_owned_my_type(this: &MyType) -> MyOwnedType {
+fn to_owned_my_type(_: &MyType) -> MyOwnedType {
     MyOwnedType
 }
 
-fn borrow_my_type(this: &MyOwnedType) -> &MyType {
+fn borrow_my_type(_: &MyOwnedType) -> &MyType {
     &MyType
 }
 
