@@ -94,7 +94,10 @@ impl<T> BorrowMut for Option<T>
 where
     T: BorrowMut,
 {
-    type TargetMut<'a> = Option<T::TargetMut<'a>> where T: 'a;
+    type TargetMut<'a>
+        = Option<T::TargetMut<'a>>
+    where
+        T: 'a;
 
     #[inline]
     fn borrow_mut(&mut self) -> Self::TargetMut<'_> {
@@ -103,7 +106,10 @@ where
 }
 
 impl<T> BorrowMut for [T] {
-    type TargetMut<'a> = &'a mut [T] where T: 'a;
+    type TargetMut<'a>
+        = &'a mut [T]
+    where
+        T: 'a;
 
     #[inline]
     fn borrow_mut(&mut self) -> Self::TargetMut<'_> {

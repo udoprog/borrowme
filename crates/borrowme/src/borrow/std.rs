@@ -32,7 +32,10 @@ where
 macro_rules! deref {
     ($from:ty, $to:ty) => {
         impl Borrow for $from {
-            type Target<'a> = &'a $to where Self: 'a;
+            type Target<'a>
+                = &'a $to
+            where
+                Self: 'a;
 
             #[inline]
             fn borrow(&self) -> Self::Target<'_> {
@@ -47,7 +50,10 @@ deref!(OsString, OsStr);
 deref!(CString, CStr);
 
 impl<T: ?Sized> Borrow for Box<T> {
-    type Target<'a> = &'a T where T: 'a;
+    type Target<'a>
+        = &'a T
+    where
+        T: 'a;
 
     #[inline]
     fn borrow(&self) -> Self::Target<'_> {

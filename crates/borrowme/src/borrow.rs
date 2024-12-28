@@ -92,7 +92,10 @@ impl<T> Borrow for Option<T>
 where
     T: Borrow,
 {
-    type Target<'a> = Option<T::Target<'a>> where T: 'a;
+    type Target<'a>
+        = Option<T::Target<'a>>
+    where
+        T: 'a;
 
     #[inline]
     fn borrow(&self) -> Self::Target<'_> {
@@ -101,7 +104,10 @@ where
 }
 
 impl<T> Borrow for [T] {
-    type Target<'a> = &'a [T] where T: 'a;
+    type Target<'a>
+        = &'a [T]
+    where
+        T: 'a;
 
     #[inline]
     fn borrow(&self) -> Self::Target<'_> {
