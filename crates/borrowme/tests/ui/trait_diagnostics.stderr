@@ -9,7 +9,6 @@ error[E0277]: `MyType` doesn't implement `Debug`
    |
    = help: the trait `Debug` is not implemented for `MyType`
    = note: add `#[derive(Debug)]` to `MyType` or manually `impl Debug for MyType`
-   = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyType` with `#[derive(Debug)]`
    |
 6  + #[derive(Debug)]
@@ -25,7 +24,6 @@ error[E0277]: the trait bound `MyOwnedType: Clone` is not satisfied
 13 |     lang: &'a MyType,
    |     ^^^^^^^ the trait `Clone` is not implemented for `MyOwnedType`
    |
-   = note: this error originates in the derive macro `Clone` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Clone)]`
    |
 7  + #[derive(Clone)]
@@ -43,7 +41,6 @@ error[E0277]: `MyOwnedType` doesn't implement `Debug`
    |
    = help: the trait `Debug` is not implemented for `MyOwnedType`
    = note: add `#[derive(Debug)]` to `MyOwnedType` or manually `impl Debug for MyOwnedType`
-   = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider annotating `MyOwnedType` with `#[derive(Debug)]`
    |
 7  + #[derive(Debug)]
