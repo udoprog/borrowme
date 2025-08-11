@@ -5,9 +5,8 @@ error[E0277]: `MyType` doesn't implement `Debug`
    |                 ----- in this derive macro expansion
 ...
 13 |     lang: &'a MyType,
-   |     ^^^^^^^^^^^^^^^^ `MyType` cannot be formatted using `{:?}`
+   |     ^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `MyType`
    |
-   = help: the trait `Debug` is not implemented for `MyType`
    = note: add `#[derive(Debug)]` to `MyType` or manually `impl Debug for MyType`
 help: consider annotating `MyType` with `#[derive(Debug)]`
    |
@@ -37,9 +36,8 @@ error[E0277]: `MyOwnedType` doesn't implement `Debug`
    |                 ----- in this derive macro expansion
 ...
 13 |     lang: &'a MyType,
-   |     ^^^^^^^ `MyOwnedType` cannot be formatted using `{:?}`
+   |     ^^^^^^^ the trait `Debug` is not implemented for `MyOwnedType`
    |
-   = help: the trait `Debug` is not implemented for `MyOwnedType`
    = note: add `#[derive(Debug)]` to `MyOwnedType` or manually `impl Debug for MyOwnedType`
 help: consider annotating `MyOwnedType` with `#[derive(Debug)]`
    |
