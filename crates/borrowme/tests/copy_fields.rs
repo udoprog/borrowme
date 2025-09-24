@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use borrowme::borrowme;
 
 #[allow(non_camel_case_types)]

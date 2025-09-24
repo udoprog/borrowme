@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use borrowme::borrowme;
 
 #[borrowme]
