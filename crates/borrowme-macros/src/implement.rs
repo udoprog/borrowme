@@ -167,6 +167,8 @@ pub(crate) fn implement(
     let mut output = item.clone();
 
     let mut needs_mut = false;
+    let mut clone_type_params_out: HashSet<syn::Ident> = HashSet::new();
+    let mut borrowed_type_params_out: HashSet<syn::Ident> = HashSet::new();
 
     let (to_owned_fn, borrow_fn) = match (&mut output, &mut item) {
         (syn::Item::Struct(o_st), syn::Item::Struct(b_st)) => {
@@ -184,6 +186,9 @@ pub(crate) fn implement(
 
             let mut to_owned_entries = Vec::new();
             let mut borrow_entries = Vec::new();
+            let type_params = collect_type_param_idents(&b_st.generics);
+            let mut clone_type_params = HashSet::new();
+            let mut borrowed_type_params = HashSet::new();
 
             process_fields(
                 cx,
@@ -194,7 +199,15 @@ pub(crate) fn implement(
                 &mut to_owned_entries,
                 &mut borrow_entries,
                 &mut needs_mut,
+                &type_params,
+                &mut clone_type_params,
+                &mut borrowed_type_params,
             )?;
+
+            add_clone_where_predicates(&mut o_st.generics, &clone_type_params);
+            add_to_owned_where_predicates(cx, &mut o_st.generics, &borrowed_type_params);
+            borrowed_type_params_out.extend(borrowed_type_params);
+            clone_type_params_out.extend(clone_type_params);
 
             let owned_ident = &o_st.ident;
 
@@ -246,6 +259,9 @@ pub(crate) fn implement(
 
             let mut to_owned_variants = Vec::new();
             let mut borrow_variants = Vec::new();
+            let type_params = collect_type_param_idents(&b_en.generics);
+            let mut clone_type_params = HashSet::new();
+            let mut borrowed_type_params = HashSet::new();
 
             let owned_ident = o_en.ident.clone();
             let borrow_ident = b_en.ident.clone();
@@ -268,6 +284,9 @@ pub(crate) fn implement(
                     &mut to_owned_entries,
                     &mut borrow_entries,
                     &mut needs_mut,
+                    &type_params,
+                    &mut clone_type_params,
+                    &mut borrowed_type_params,
                 )?;
 
                 let fields = o_variant
@@ -330,6 +349,11 @@ pub(crate) fn implement(
                 }
             };
 
+            add_clone_where_predicates(&mut o_en.generics, &clone_type_params);
+            add_to_owned_where_predicates(cx, &mut o_en.generics, &borrowed_type_params);
+            borrowed_type_params_out.extend(borrowed_type_params);
+            clone_type_params_out.extend(clone_type_params);
+
             (to_owned_fn, borrow_fn)
         }
         (_, item) => {
@@ -358,7 +382,10 @@ pub(crate) fn implement(
     let (_, to_owned_type_generics, _) = owned_generics.split_for_impl();
 
     let to_owned = {
-        let (impl_generics, type_generics, where_generics) = borrow_generics.split_for_impl();
+        let mut borrow_generics_with_bounds = borrow_generics.clone();
+        add_clone_where_predicates(&mut borrow_generics_with_bounds, &clone_type_params_out);
+        add_to_owned_where_predicates(cx, &mut borrow_generics_with_bounds, &borrowed_type_params_out);
+        let (impl_generics, type_generics, where_generics) = borrow_generics_with_bounds.split_for_impl();
         let to_owned = &cx.borrowme_to_owned_t;
 
         quote! {
@@ -385,7 +412,23 @@ pub(crate) fn implement(
 
         let (_, borrow_return_type_generics, _) = borrow_generics.split_for_impl();
 
-        let (impl_generics, type_generics, where_generics) = owned_generics.split_for_impl();
+        let mut owned_generics_for_borrow = owned_generics.clone();
+        add_borrow_where_predicates(cx, &mut owned_generics_for_borrow, &borrowed_type_params_out, needs_mut);
+        let (impl_generics, type_generics, where_generics) = owned_generics_for_borrow.split_for_impl();
+
+        // Build `T: 'this` where predicates for all type params that appear in borrowed fields
+        // (both those using the borrowme ToOwned path and those using the Std clone/ref path).
+        let type_param_lifetime_bounds: Vec<syn::WherePredicate> = borrowed_type_params_out
+            .iter()
+            .chain(clone_type_params_out.iter())
+            .map(|ident| syn::parse_quote!(#ident: #this_lt))
+            .collect();
+
+        let gat_where = if type_param_lifetime_bounds.is_empty() {
+            quote! {}
+        } else {
+            quote! { where #(#type_param_lifetime_bounds,)* }
+        };
 
         if needs_mut {
             let borrow_mut_t = &cx.borrowme_borrow_mut_t;
@@ -393,7 +436,7 @@ pub(crate) fn implement(
             quote! {
                 #[automatically_derived]
                 impl #impl_generics #borrow_mut_t for #owned_ident #type_generics #where_generics {
-                    type TargetMut<#this_lt> = #borrow_ident #borrow_return_type_generics;
+                    type TargetMut<#this_lt> #gat_where = #borrow_ident #borrow_return_type_generics;
                     #borrow_fn
                 }
             }
@@ -403,7 +446,7 @@ pub(crate) fn implement(
             quote! {
                 #[automatically_derived]
                 impl #impl_generics #borrow_t for #owned_ident #type_generics #where_generics {
-                    type Target<#this_lt> = #borrow_ident #borrow_return_type_generics;
+                    type Target<#this_lt> #gat_where = #borrow_ident #borrow_return_type_generics;
                     #borrow_fn
                 }
             }
@@ -427,6 +470,11 @@ fn process_fields(
     to_owned_entries: &mut Vec<syn::FieldValue>,
     borrow_entries: &mut Vec<syn::FieldValue>,
     parent_needs_mut: &mut bool,
+    type_params: &HashSet<syn::Ident>,
+    // Type params that need `T: Clone` bound (used in `Std` path for direct refs to type params).
+    clone_type_params: &mut HashSet<syn::Ident>,
+    // Type params that need `T: 'this` in the GAT and `T: ::borrowme::ToOwned` in impls.
+    borrowed_type_params: &mut HashSet<syn::Ident>,
 ) -> Result<(), ()> {
     for (index, (o_field, b_field)) in o_fields.iter_mut().zip(b_fields.iter_mut()).enumerate() {
         let field_ty_spans = field_ty_spans(o_field);
@@ -471,6 +519,27 @@ fn process_fields(
                 }
             }
             _ => {
+                // If the immediate reference target is a bare type parameter (e.g. `&'a T`
+                // where `T` is from the struct's own generics), treat it like `#[borrowme(std)]`:
+                // the owned field stores `T` directly, and we use clone/ref for conversion.
+                let is_type_param_ref = immediate_reference.as_ref().is_some_and(|inner| {
+                    is_type_param(inner, type_params)
+                });
+
+                if is_type_param_ref
+                    && matches!(attr.ty.kind(), attr::FieldTypeKind::Default)
+                    && attr.ty.owned.is_none()
+                {
+                    attr.ty.set_kind(attr::FieldTypeKind::Std);
+                    // Track which type params use the Std (clone+ref) path so we can add
+                    // `T: Clone` and `T: 'this` bounds.
+                    if let Some(syn::Type::Path(tp)) = &immediate_reference {
+                        if let Some(ident) = tp.path.get_ident() {
+                            clone_type_params.insert(ident.clone());
+                        }
+                    }
+                }
+
                 let is_std_ref = matches!(attr.ty.kind(), attr::FieldTypeKind::Std if immediate_reference.is_some());
 
                 // For non-copy types, build an expression that tries to use the
@@ -521,6 +590,7 @@ fn process_fields(
             }
             (_, _, Some(ty)) => {
                 o_field.ty = ty.as_type();
+                collect_type_params_in_type(&b_field.ty, type_params, borrowed_type_params);
 
                 let borrow = if needs_mut {
                     attr.borrow_mut(cx)
@@ -776,6 +846,148 @@ fn process_generic_type<P>(
             }
             _ => {}
         }
+    }
+}
+
+/// Check whether a type is a bare type parameter (a single-segment path that
+/// matches one of the known type param idents).
+fn is_type_param(ty: &syn::Type, type_params: &HashSet<syn::Ident>) -> bool {
+    if let syn::Type::Path(tp) = ty {
+        if let Some(ident) = tp.path.get_ident() {
+            return type_params.contains(ident);
+        }
+    }
+    false
+}
+
+/// Collect type parameter idents (from `type_params`) that appear anywhere in `ty`,
+/// inserting them into `out`.
+fn collect_type_params_in_type(
+    ty: &syn::Type,
+    type_params: &HashSet<syn::Ident>,
+    out: &mut HashSet<syn::Ident>,
+) {
+    match ty {
+        syn::Type::Path(ty) => {
+            if let Some(ident) = ty.path.get_ident() {
+                if type_params.contains(ident) {
+                    out.insert(ident.clone());
+                }
+            }
+            for seg in &ty.path.segments {
+                match &seg.arguments {
+                    syn::PathArguments::AngleBracketed(args) => {
+                        for arg in &args.args {
+                            match arg {
+                                syn::GenericArgument::Type(t) => {
+                                    collect_type_params_in_type(t, type_params, out);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    syn::PathArguments::Parenthesized(args) => {
+                        for t in &args.inputs {
+                            collect_type_params_in_type(t, type_params, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        syn::Type::Reference(ty) => {
+            collect_type_params_in_type(&ty.elem, type_params, out);
+        }
+        syn::Type::Slice(ty) => {
+            collect_type_params_in_type(&ty.elem, type_params, out);
+        }
+        syn::Type::Array(ty) => {
+            collect_type_params_in_type(&ty.elem, type_params, out);
+        }
+        syn::Type::Tuple(ty) => {
+            for elem in &ty.elems {
+                collect_type_params_in_type(elem, type_params, out);
+            }
+        }
+        syn::Type::Group(ty) => {
+            collect_type_params_in_type(&ty.elem, type_params, out);
+        }
+        _ => {}
+    }
+}
+
+/// Collect the idents of all type parameters from a generics declaration.
+fn collect_type_param_idents(generics: &syn::Generics) -> HashSet<syn::Ident> {
+    generics
+        .params
+        .iter()
+        .filter_map(|p| match p {
+            syn::GenericParam::Type(t) => Some(t.ident.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Add `T: Clone` where predicates for each ident in `type_params` to the given generics.
+fn add_clone_where_predicates(generics: &mut syn::Generics, type_params: &HashSet<syn::Ident>) {
+    if type_params.is_empty() {
+        return;
+    }
+
+    let where_clause = generics.make_where_clause();
+
+    for ident in type_params {
+        where_clause
+            .predicates
+            .push(syn::parse_quote!(#ident: ::core::clone::Clone));
+    }
+}
+
+/// Add `T: ::borrowme::ToOwned` where predicates for each ident in `type_params`
+/// to the given generics.
+fn add_to_owned_where_predicates(
+    cx: &Ctxt,
+    generics: &mut syn::Generics,
+    type_params: &HashSet<syn::Ident>,
+) {
+    if type_params.is_empty() {
+        return;
+    }
+
+    let to_owned_t = &cx.borrowme_to_owned_t;
+    let where_clause = generics.make_where_clause();
+
+    for ident in type_params {
+        where_clause
+            .predicates
+            .push(syn::parse_quote!(#ident: #to_owned_t));
+    }
+}
+
+/// Add `<T as ::borrowme::ToOwned>::Owned: ::borrowme::Borrow` (or BorrowMut)
+/// where predicates for the `Borrow`/`BorrowMut` impl.
+fn add_borrow_where_predicates(
+    cx: &Ctxt,
+    generics: &mut syn::Generics,
+    type_params: &HashSet<syn::Ident>,
+    needs_mut: bool,
+) {
+    if type_params.is_empty() {
+        return;
+    }
+
+    let to_owned_t = &cx.borrowme_to_owned_t;
+    let borrow_t = if needs_mut {
+        &cx.borrowme_borrow_mut_t
+    } else {
+        &cx.borrowme_borrow_t
+    };
+    let where_clause = generics.make_where_clause();
+
+    for ident in type_params {
+        where_clause
+            .predicates
+            .push(syn::parse_quote!(<#ident as #to_owned_t>::Owned: #borrow_t));
     }
 }
 
