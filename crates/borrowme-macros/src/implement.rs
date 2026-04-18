@@ -499,10 +499,10 @@ fn process_fields(
 
                         attr.ty.set_owned(Respan::new(ty, field_ty_spans));
                     }
-                    TypeHint::Copy => {
-                        if !matches!(attr.ty.kind(), attr::FieldTypeKind::Copy(false)) {
-                            attr.ty.set_kind(attr::FieldTypeKind::Copy(true));
-                        }
+                    TypeHint::Copy
+                        if !matches!(attr.ty.kind(), attr::FieldTypeKind::Copy(false)) =>
+                    {
+                        attr.ty.set_kind(attr::FieldTypeKind::Copy(true));
                     }
                     _ => {}
                 }
